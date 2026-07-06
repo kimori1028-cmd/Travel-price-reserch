@@ -175,7 +175,7 @@ export function CalendarView({ index, adults, onAddFavorite }: Props) {
       </div>
 
       <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-        ※ 表示は「発日から{nights}泊」の1泊料金合算による<b>参考価格</b>です。連泊プラン等により実際の予約価格と異なる場合があります。× = 期間中に満室の夜あり / – = 未取得・受付前。
+        ※ 表示は<b>朝食付きプラン</b>の最安値を「発日から{nights}泊」分合算した<b>参考価格</b>です。連泊プラン等により実際の予約価格と異なる場合があります。× = 期間中に満室の夜あり / – = 未取得・受付前。
       </p>
 
       {selectedDay && (

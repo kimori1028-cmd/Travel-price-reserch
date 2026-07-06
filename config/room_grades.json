@@ -1,6 +1,7 @@
 {
   "hotel_no": 38599,
   "hotel_name": "フサキビーチリゾート ホテル＆ヴィラズ ＜石垣島＞",
+  "squeeze_condition": "breakfast",
   "grades": [
     {
       "key": "villa_standard",

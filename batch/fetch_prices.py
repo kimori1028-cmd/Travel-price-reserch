@@ -110,12 +110,12 @@ def check_error(data):
         raise RuntimeError(f"APIエラー: {errors.get('errorCode')} / {errors.get('errorMessage')}")
 
 
-def fetch_one_night(app_id, access_key, hotel_no, checkin, checkout, adults):
+def fetch_one_night(app_id, access_key, hotel_no, checkin, checkout, adults, squeeze=None):
     """1泊分を全ページ取得し (roomBasicInfo, dailyCharge) のリストを返す。空きなしは []。"""
     entries = []
     page = 1
     while True:
-        data = api_get({
+        params = {
             "format": "json",
             "applicationId": app_id,
             "accessKey": access_key,
@@ -127,7 +127,10 @@ def fetch_one_night(app_id, access_key, hotel_no, checkin, checkout, adults):
             "hits": 30,
             "page": page,
             "sort": "+roomCharge",
-        })
+        }
+        if squeeze:
+            params["squeezeCondition"] = squeeze  # breakfast = 朝食付きプランのみ
+        data = api_get(params)
         if data is None or is_notfound(data):
             return entries
         check_error(data)
@@ -380,6 +383,7 @@ def main():
     hotel_no = config["hotel_no"]
     grades = config["grades"]
     grade_labels = {g["key"]: g["label"] for g in grades}
+    squeeze = config.get("squeeze_condition")
     adults_list = [int(a) for a in args.adults.split(",") if a.strip()]
 
     today = datetime.datetime.now(ZoneInfo("Asia/Tokyo")).date()
@@ -414,13 +418,13 @@ def main():
             print("お気に入りが無いため取得対象なし。終了します。")
             return
         print(f"取得開始(お気に入りのみ): hotelNo={hotel_no} 対象 {len(pairs)}件 "
-              f"(お気に入り{len(favorites)}件)")
+              f"(お気に入り{len(favorites)}件) squeeze={squeeze}")
     else:
         dates = [today + datetime.timedelta(days=args.start_offset + i)
                  for i in range(args.days)]
         pairs = [(d, adults) for d in dates for adults in adults_list]
         print(f"取得開始: hotelNo={hotel_no} {dates[0]}〜{dates[-1]} ({len(dates)}日) "
-              f"人数={adults_list} dry_run={bool(args.dry_run)}")
+              f"人数={adults_list} squeeze={squeeze} dry_run={bool(args.dry_run)}")
 
     all_rows = []
     pending = []
@@ -445,7 +449,8 @@ def main():
         checkout = (d + one).isoformat()
         fetched_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
         try:
-            entries = fetch_one_night(app_id, access_key, hotel_no, checkin, checkout, adults)
+            entries = fetch_one_night(app_id, access_key, hotel_no, checkin, checkout,
+                                      adults, squeeze)
         except Exception as e:
             print(f"  {checkin} adults={adults}: 取得失敗 {e}", file=sys.stderr)
             fail_streak += 1
