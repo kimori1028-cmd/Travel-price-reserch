@@ -1,0 +1,30 @@
+name: prices-hourly
+
+# 毎時: 直近60日分の価格を更新（人数1〜4名）
+# 所要 約10〜15分（楽天レートリミット遵守のため1リクエスト1.6秒間隔）
+
+on:
+  schedule:
+    - cron: "15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: rakuten-fetch
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fetch prices (next 60 days)
+        env:
+          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python batch/fetch_prices.py --days 60 --adults 1,2,3,4

@@ -1,0 +1,27 @@
+{
+  "hotel_no": 38599,
+  "hotel_name": "フサキビーチリゾート ホテル＆ヴィラズ ＜石垣島＞",
+  "grades": [
+    {
+      "key": "villa_standard",
+      "label": "ヴィラスタンダード",
+      "short_label": "ヴィラ",
+      "room_class": ["t"],
+      "room_name_patterns": ["ヴィラ\\s*スタンダード"]
+    },
+    {
+      "key": "patio_superior_twin",
+      "label": "パティオスーペリアツイン",
+      "short_label": "パティオ",
+      "room_class": ["ptsuptwn"],
+      "room_name_patterns": ["パティオ\\s*スーペリアツイン"]
+    },
+    {
+      "key": "superior_twin",
+      "label": "スーペリアツイン",
+      "short_label": "スーペリア",
+      "room_class": ["suptwn"],
+      "room_name_patterns": ["^スーペリアツイン"]
+    }
+  ]
+}
