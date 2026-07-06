@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { searchCheapest, type PriceIndex } from '../lib/calc'
 import { addDays, fmtDateJa, fmtYen, todayISO, WEEKDAY_LABELS } from '../lib/dates'
-import { rakutenPlanUrl } from '../lib/rakuten'
+import { anaRakupackUrl, rakutenPlanUrl } from '../lib/rakuten'
 import { GRADES, NIGHT_OPTIONS, gradeDef, type GradeKey } from '../lib/types'
 import { Chip } from './Chip'
 
@@ -18,14 +18,26 @@ export function SearchView({ index, adults, onAddFavorite }: Props) {
   const [nightsList, setNightsList] = useState<number[]>([3, 4])
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]) // 月〜金
   const [grades, setGrades] = useState<GradeKey[]>(GRADES.map((g) => g.key))
-  const [from, setFrom] = useState(today)
-  const [to, setTo] = useState(addDays(today, 365))
+  const [fromMonth, setFromMonth] = useState(today.slice(0, 7))
+  const [toMonth, setToMonth] = useState(addDays(today, 365).slice(0, 7))
   const [searched, setSearched] = useState(false)
 
   const results = useMemo(() => {
     if (!searched) return []
-    return searchCheapest(index, { nightsList, weekdays, grades, from, to, adults })
-  }, [searched, index, nightsList, weekdays, grades, from, to, adults])
+    // 月指定 → 実際の日付範囲へ（開始月は今日以降、終了月は月末まで）
+    const fromDate = `${fromMonth}-01` < today ? today : `${fromMonth}-01`
+    const [ty, tm] = toMonth.split('-').map(Number)
+    const lastDay = new Date(Date.UTC(ty, tm, 0)).getUTCDate()
+    const toDate = `${toMonth}-${String(lastDay).padStart(2, '0')}`
+    return searchCheapest(index, {
+      nightsList,
+      weekdays,
+      grades,
+      from: fromDate,
+      to: toDate,
+      adults,
+    })
+  }, [searched, index, nightsList, weekdays, grades, fromMonth, toMonth, adults, today])
 
   const toggle = <T,>(list: T[], v: T, set: (next: T[]) => void) => {
     set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v])
@@ -78,25 +90,25 @@ export function SearchView({ index, adults, onAddFavorite }: Props) {
         </div>
 
         <div>
-          <div className="mb-1.5 text-xs font-bold text-slate-500">検索期間</div>
+          <div className="mb-1.5 text-xs font-bold text-slate-500">検索期間（月単位）</div>
           <div className="flex items-center gap-2">
             <input
-              type="date"
-              value={from}
-              min={today}
+              type="month"
+              value={fromMonth}
+              min={today.slice(0, 7)}
               onChange={(e) => {
-                setFrom(e.target.value)
+                setFromMonth(e.target.value)
                 setSearched(false)
               }}
               className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-2 text-sm"
             />
             <span className="text-slate-400">〜</span>
             <input
-              type="date"
-              value={to}
-              min={from}
+              type="month"
+              value={toMonth}
+              min={fromMonth}
               onChange={(e) => {
-                setTo(e.target.value)
+                setToMonth(e.target.value)
                 setSearched(false)
               }}
               className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-2 text-sm"
@@ -143,14 +155,14 @@ export function SearchView({ index, adults, onAddFavorite }: Props) {
                       </div>
                     </div>
                   </div>
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-2 flex gap-1.5">
                     <a
                       href={rakutenPlanUrl(r.checkin, r.nights, adults)}
                       target="_blank"
                       rel="noreferrer"
                       className="flex-1 rounded-lg bg-rose-500 py-1.5 text-center text-xs font-bold text-white"
                     >
-                      楽天トラベルで確認
+                      サイトで確認
                     </a>
                     <button
                       type="button"
@@ -159,6 +171,29 @@ export function SearchView({ index, adults, onAddFavorite }: Props) {
                     >
                       ★ 保存
                     </button>
+                  </div>
+                  <div className="mt-1.5">
+                    <div className="mb-1 text-[9px] font-bold text-slate-400">
+                      ANA楽パック（行き89便 8時発・レンタカー付き）
+                    </div>
+                    <div className="flex gap-1.5">
+                      <a
+                        href={anaRakupackUrl(r.checkin, r.nights, adults, '90')}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 rounded-lg bg-sky-700 py-1.5 text-center text-[10px] font-bold text-white"
+                      >
+                        帰り 90便（12時発）
+                      </a>
+                      <a
+                        href={anaRakupackUrl(r.checkin, r.nights, adults, '92')}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 rounded-lg bg-sky-700 py-1.5 text-center text-[10px] font-bold text-white"
+                      >
+                        帰り 92便（15時発）
+                      </a>
+                    </div>
                   </div>
                 </div>
               )

@@ -1,6 +1,6 @@
 import { stayQuote, type PriceIndex } from '../lib/calc'
 import { fmtDateJa, fmtMan, fmtYen } from '../lib/dates'
-import { rakutenPlanUrl } from '../lib/rakuten'
+import { anaRakupackUrl, rakutenPlanUrl } from '../lib/rakuten'
 import { gradeDef, type Favorite } from '../lib/types'
 
 interface Props {
@@ -93,7 +93,7 @@ export function FavoritesView({
             rel="noreferrer"
             className="flex-1 rounded-lg bg-rose-500 py-1.5 text-center text-xs font-bold text-white"
           >
-            楽天トラベルで確認
+            サイトで確認
           </a>
           {f.is_mine && (
             <>
@@ -131,6 +131,29 @@ export function FavoritesView({
               </button>
             </>
           )}
+        </div>
+        <div className="mt-1.5">
+          <div className="mb-1 text-[9px] font-bold text-slate-400">
+            ANA楽パック（行き89便 8時発・レンタカー付き）
+          </div>
+          <div className="flex gap-1.5">
+            <a
+              href={anaRakupackUrl(f.checkin_date, f.nights, f.adult_num, '90')}
+              target="_blank"
+              rel="noreferrer"
+              className="flex-1 rounded-lg bg-sky-700 py-1.5 text-center text-[10px] font-bold text-white"
+            >
+              帰り 90便（12時発）
+            </a>
+            <a
+              href={anaRakupackUrl(f.checkin_date, f.nights, f.adult_num, '92')}
+              target="_blank"
+              rel="noreferrer"
+              className="flex-1 rounded-lg bg-sky-700 py-1.5 text-center text-[10px] font-bold text-white"
+            >
+              帰り 92便（15時発）
+            </a>
+          </div>
         </div>
       </div>
     )
