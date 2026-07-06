@@ -4,7 +4,7 @@
   "description": "フサキビーチリゾートの楽天トラベル価格を監視するツール",
   "start_url": "/",
   "scope": "/",
-  "display": "standalone",
+  "display": "browser",
   "background_color": "#f1f5f9",
   "theme_color": "#0f766e",
   "icons": [
