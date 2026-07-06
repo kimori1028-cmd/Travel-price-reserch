@@ -4,6 +4,8 @@ export interface GradeDef {
   key: GradeKey
   label: string
   short: string
+  /** カレンダーセル用の1文字表記 */
+  letter: string
   /** Tailwind クラス（タブ・バッジ用） */
   color: string
   bgSoft: string
@@ -14,6 +16,7 @@ export const GRADES: GradeDef[] = [
     key: 'villa_standard',
     label: 'ヴィラスタンダード',
     short: 'ヴィラ',
+    letter: 'V',
     color: 'text-emerald-700',
     bgSoft: 'bg-emerald-50 border-emerald-300',
   },
@@ -21,6 +24,7 @@ export const GRADES: GradeDef[] = [
     key: 'superior_twin',
     label: 'スーペリアツイン',
     short: 'スーペリア',
+    letter: 'S',
     color: 'text-sky-700',
     bgSoft: 'bg-sky-50 border-sky-300',
   },
@@ -28,6 +32,7 @@ export const GRADES: GradeDef[] = [
     key: 'patio_superior_twin',
     label: 'パティオスーペリアツイン',
     short: 'パティオ',
+    letter: 'P',
     color: 'text-violet-700',
     bgSoft: 'bg-violet-50 border-violet-300',
   },

@@ -39,11 +39,19 @@ export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavori
   return (
     <div className="fixed inset-0 z-40 flex items-end bg-black/40" onClick={onClose}>
       <div
-        className="max-h-[85vh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 pb-8"
+        className="relative max-h-[85vh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 pb-8"
         onClick={(e) => e.stopPropagation()}
       >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="閉じる"
+          className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-lg text-slate-500 active:bg-slate-200"
+        >
+          ✕
+        </button>
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-300" />
-        <div className="mb-1 flex items-baseline justify-between">
+        <div className="mb-1 flex items-baseline justify-between pr-10">
           <h2 className="text-base font-bold">
             {fmtDateJa(checkin)}発 {nights}泊{nights + 1}日
           </h2>
