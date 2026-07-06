@@ -384,8 +384,19 @@ def main():
     favorites = []
     if not args.dry_run:
         # 過去日の掃除(価格・履歴・お気に入り) + お気に入りの読み込み
-        prune_past(supabase_url, service_key, today.isoformat())
-        favorites = load_favorites(supabase_url, service_key, today.isoformat())
+        try:
+            prune_past(supabase_url, service_key, today.isoformat())
+            favorites = load_favorites(supabase_url, service_key, today.isoformat())
+        except RuntimeError as e:
+            msg = str(e)
+            if "PGRST205" in msg or "PGRST204" in msg or "Could not find" in msg:
+                sys.exit(
+                    "エラー: Supabaseに必要なテーブル/列がありません。\n"
+                    "SQL Editor で以下の2ファイルを実行してから再実行してください:\n"
+                    "  - supabase/add_price_history.sql\n"
+                    "  - supabase/add_favorite_notify.sql\n"
+                    f"詳細: {msg}")
+            raise
 
     # 取得対象の (宿泊日, 人数) ペアを決める
     if args.favorites_only:
