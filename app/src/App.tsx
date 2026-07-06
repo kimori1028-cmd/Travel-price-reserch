@@ -4,6 +4,7 @@ import { CalendarView } from './components/CalendarView'
 import { FavoritesView } from './components/FavoritesView'
 import { LoginView } from './components/LoginView'
 import { SearchView } from './components/SearchView'
+import { SetPasswordView } from './components/SetPasswordView'
 import { buildIndex } from './lib/calc'
 import { lastUpdated, loadNightlyPrices } from './lib/data'
 import {
@@ -35,6 +36,11 @@ export default function App() {
   const [favLoading, setFavLoading] = useState(true)
   const [toast, setToast] = useState<string | null>(null)
 
+  // 招待リンク/パスワード再設定リンクから来た場合はパスワード設定画面を出す
+  const [needsPassword, setNeedsPassword] = useState(
+    () => /type=(invite|recovery|signup)/.test(window.location.hash),
+  )
+
   // 認証状態の監視
   useEffect(() => {
     if (!supabase) return
@@ -42,7 +48,10 @@ export default function App() {
       setSession(data.session)
       setAuthReady(true)
     })
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      setSession(s)
+      if (event === 'PASSWORD_RECOVERY') setNeedsPassword(true)
+    })
     return () => sub.subscription.unsubscribe()
   }, [])
 
@@ -157,6 +166,9 @@ export default function App() {
 
   if (!authReady) {
     return <div className="py-20 text-center text-sm text-slate-400">読み込み中…</div>
+  }
+  if (!isDemo && session && needsPassword) {
+    return <SetPasswordView onDone={() => setNeedsPassword(false)} />
   }
   if (!loggedIn) {
     return <LoginView />

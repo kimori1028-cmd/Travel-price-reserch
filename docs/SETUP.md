@@ -21,10 +21,16 @@ GitHub Actions（毎時/毎晩バッチ）→ 楽天トラベルAPI
    - テーブル（価格・お気に入り・プロフィール）と権限設定（RLS）が一括で作られます。
 3. **サインアップを無効化**（身内以外が登録できないように）:
    - Authentication → Sign In / Providers → Email → **「Allow new users to sign up」をOFF**
-4. **身内のアカウントを発行**:
-   - Authentication → Users → 「Add user」→「Create new user」でメールアドレスとパスワードを入力して作成
-   - 「Auto Confirm User」にチェックを入れて作成する
+4. **リダイレクトURLを設定**（招待メール・パスワード再設定に必要）:
+   - Authentication → URL Configuration → **Site URL** に VercelのアプリURL（`https://〜.vercel.app`）を設定
+   - 同ページの **Redirect URLs** にも同じURLを追加
+5. **身内のアカウントを発行**（どちらかの方法で）:
+   - **招待メール方式（推奨）**: Authentication → Users → 「Add user」→「**Send invitation**」でメールアドレスだけ入力
+     → 本人に届いたメールのリンクを開くとアプリが開き、**本人が自分でパスワードを設定**できます
+   - **手動発行方式**: 「Create new user」でメールとパスワードを入力（「Auto Confirm User」にチェック）
+     → 本人はログイン画面の「パスワードを忘れた／設定し直す」からいつでも自分のパスワードに変更できます
    - 表示名はメールの@より前が自動で使われます（profiles テーブルで変更可）
+   > メール送信はSupabase内蔵のメール機能を使うため、無料プランでは短時間に送れる通数に制限があります（1時間に数通程度）。招待は1人ずつ間隔を空けて送ってください。
 5. **キーを控える**（Settings → API）:
    - `Project URL`（例: `https://xxxx.supabase.co`）
    - `anon` `public` キー … フロント用（公開されてもRLSで守られる）
