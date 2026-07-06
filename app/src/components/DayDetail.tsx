@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { stayQuote, type PriceIndex } from '../lib/calc'
 import { addDays, fmtDateJa, fmtDateShort, fmtYen } from '../lib/dates'
 import { loadHistory, type HistoryEvent } from '../lib/history'
-import { rakutenPlanUrl } from '../lib/rakuten'
+import { openAnaRakupack, rakutenPlanUrl } from '../lib/rakuten'
 import { buildTrend, trendStats } from '../lib/trend'
 import { GRADES, type GradeKey } from '../lib/types'
 import { TrendChart } from './TrendChart'
@@ -136,19 +136,26 @@ export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavori
                         価格推移の記録はまだありません（今後の更新で蓄積されます）
                       </div>
                     )}
-                    <div className="mt-2 flex gap-2">
+                    <div className="mt-2 flex gap-1.5">
                       <a
                         href={rakutenPlanUrl(checkin, nights, adults)}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex-1 rounded-lg bg-rose-500 py-2 text-center text-sm font-bold text-white"
+                        className="flex-1 rounded-lg bg-rose-500 py-2 text-center text-[11px] font-bold leading-relaxed text-white"
                       >
-                        楽天トラベルで確認
+                        サイトで確認
                       </a>
                       <button
                         type="button"
+                        onClick={() => openAnaRakupack(checkin, nights, adults)}
+                        className="flex-1 rounded-lg bg-sky-700 py-2 text-center text-[11px] font-bold leading-relaxed text-white"
+                      >
+                        ANA楽パックで確認
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => onAddFavorite(g.key, checkin, nights, q.total)}
-                        className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-600"
+                        className="rounded-lg border border-amber-400 bg-amber-50 px-2.5 py-2 text-[11px] font-bold text-amber-600"
                       >
                         ★ 保存
                       </button>
