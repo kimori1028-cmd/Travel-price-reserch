@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { stayQuote, type PriceIndex, type StayQuote } from '../lib/calc'
 import { addDays, monthGrid, todayISO, WEEKDAY_LABELS } from '../lib/dates'
 import { loadHistoryRange, type HistoryEvent } from '../lib/history'
+import { isHoliday } from '../lib/holidays'
 import { buildTrend, recentTotalChange } from '../lib/trend'
 import { GRADES, NIGHT_OPTIONS, type GradeKey } from '../lib/types'
 import { DayDetail } from './DayDetail'
@@ -203,6 +204,13 @@ export function CalendarView({ index, adults, updated, onAddFavorite }: Props) {
             {week.map((day, di) => {
               if (!day) return <div key={di} className={cellHeight} />
               const dayNum = Number(day.slice(8))
+              const holiday = isHoliday(day)
+              const numColor =
+                di === 0 || holiday
+                  ? 'text-rose-400'
+                  : di === 6
+                    ? 'text-sky-400'
+                    : 'text-slate-500'
               return (
                 <button
                   key={di}
@@ -212,13 +220,7 @@ export function CalendarView({ index, adults, updated, onAddFavorite }: Props) {
                     day < today ? 'bg-slate-50' : 'active:bg-teal-50'
                   }`}
                 >
-                  <div
-                    className={`text-xs ${
-                      di === 0 ? 'text-rose-400' : di === 6 ? 'text-sky-400' : 'text-slate-500'
-                    }`}
-                  >
-                    {dayNum}
-                  </div>
+                  <div className={`text-xs ${numColor}`}>{dayNum}</div>
                   {day < today ? (
                     <div className="text-xs text-slate-300">-</div>
                   ) : (
