@@ -1,6 +1,10 @@
+import { useEffect, useMemo, useState } from 'react'
 import { stayQuote, type PriceIndex } from '../lib/calc'
-import { fmtDateJa, fmtDateShort, fmtYen } from '../lib/dates'
+import { addDays, fmtDateJa, fmtDateShort, fmtYen } from '../lib/dates'
+import { loadHistory, type HistoryEvent } from '../lib/history'
+import { buildTrend, trendStats } from '../lib/trend'
 import { GRADES, type GradeKey } from '../lib/types'
+import { TrendChart } from './TrendChart'
 
 interface Props {
   index: PriceIndex
@@ -12,6 +16,25 @@ interface Props {
 }
 
 export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavorite }: Props) {
+  const [history, setHistory] = useState<HistoryEvent[] | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    setHistory(null)
+    loadHistory(checkin, nights, adults).then((events) => {
+      if (alive) setHistory(events)
+    })
+    return () => {
+      alive = false
+    }
+  }, [checkin, nights, adults])
+
+  const nightDates = useMemo(
+    () => Array.from({ length: nights }, (_, i) => addDays(checkin, i)),
+    [checkin, nights],
+  )
+  const now = Date.now()
+
   return (
     <div className="fixed inset-0 z-40 flex items-end bg-black/40" onClick={onClose}>
       <div
@@ -33,6 +56,10 @@ export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavori
           {GRADES.map((g) => {
             const q = stayQuote(index, adults, g.key, checkin, nights)
             const firstRow = q.nights[0]?.row
+            const trend = history
+              ? buildTrend(history.filter((e) => e.room_grade === g.key), nightDates)
+              : []
+            const stats = trendStats(trend)
             return (
               <div key={g.key} className={`rounded-xl border p-3 ${g.bgSoft}`}>
                 <div className="flex items-center justify-between">
@@ -61,6 +88,43 @@ export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavori
                         初日プラン: {firstRow.plan_name}
                         {firstRow.with_breakfast != null &&
                           (firstRow.with_breakfast ? '（朝食あり）' : '（朝食なし）')}
+                      </div>
+                    )}
+                    {stats && (
+                      <div className="mt-2 rounded-lg bg-white/70 p-2">
+                        <div className="text-[11px] font-bold text-slate-500">価格推移</div>
+                        <div className="mt-0.5 flex gap-3 text-[11px] text-slate-600">
+                          <span className="whitespace-nowrap">
+                            <span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-600" />
+                            最安 {fmtYen(stats.min)}
+                          </span>
+                          {stats.max !== stats.min && (
+                            <span className="whitespace-nowrap">
+                              <span className="mr-1 inline-block h-2 w-2 rounded-full bg-rose-600" />
+                              最高 {fmtYen(stats.max)}
+                            </span>
+                          )}
+                        </div>
+                        {stats.max === stats.min ? (
+                          <div className="py-1 text-[11px] text-slate-400">
+                            記録開始からまだ変動はありません
+                          </div>
+                        ) : (
+                          <TrendChart points={trend} now={now} />
+                        )}
+                        <div className="text-right text-[10px] text-slate-400">
+                          {new Date(trend[0].t).toLocaleDateString('ja-JP', {
+                            timeZone: 'Asia/Tokyo',
+                            month: 'numeric',
+                            day: 'numeric',
+                          })}
+                          〜今日
+                        </div>
+                      </div>
+                    )}
+                    {history !== null && !stats && (
+                      <div className="mt-2 text-[10px] text-slate-400">
+                        価格推移の記録はまだありません（今後の更新で蓄積されます）
                       </div>
                     )}
                     <div className="mt-2 flex gap-2">

@@ -159,25 +159,68 @@ def classify(basic, grades):
     return None
 
 
-def upsert_rows(supabase_url, service_key, rows):
-    """PostgREST 経由で nightly_price に upsert する。"""
-    url = (supabase_url.rstrip("/")
-           + "/rest/v1/nightly_price?on_conflict=hotel_no,room_grade,stay_date,adult_num")
+def supabase_headers(service_key, extra=None):
+    headers = {
+        "apikey": service_key,
+        "Authorization": f"Bearer {service_key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+    if extra:
+        headers.update(extra)
+    return headers
+
+
+def supabase_request(url, service_key, method="GET", data=None, extra_headers=None):
+    body = json.dumps(data).encode("utf-8") if data is not None else None
+    req = urllib.request.Request(url, data=body, method=method,
+                                 headers=supabase_headers(service_key, extra_headers))
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            text = resp.read().decode("utf-8")
+            return json.loads(text) if text else None
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Supabase {method} 失敗 HTTP {e.code}: {body_text[:300]}") from e
+
+
+def upsert_rows(supabase_url, service_key, table, rows, on_conflict=None):
+    """PostgREST 経由でテーブルへ insert/upsert する。"""
+    url = supabase_url.rstrip("/") + f"/rest/v1/{table}"
+    prefer = "return=minimal"
+    if on_conflict:
+        url += f"?on_conflict={on_conflict}"
+        prefer = "resolution=merge-duplicates,return=minimal"
     for i in range(0, len(rows), UPSERT_CHUNK):
-        chunk = rows[i:i + UPSERT_CHUNK]
-        body = json.dumps(chunk).encode("utf-8")
-        req = urllib.request.Request(url, data=body, method="POST", headers={
-            "apikey": service_key,
-            "Authorization": f"Bearer {service_key}",
-            "Content-Type": "application/json",
-            "Prefer": "resolution=merge-duplicates,return=minimal",
-        })
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                resp.read()
-        except urllib.error.HTTPError as e:
-            body_text = e.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Supabase upsert失敗 HTTP {e.code}: {body_text[:300]}") from e
+        supabase_request(url, service_key, method="POST", data=rows[i:i + UPSERT_CHUNK],
+                         extra_headers={"Prefer": prefer})
+
+
+def fetch_existing(supabase_url, service_key, hotel_no, date_from, date_to):
+    """比較用に既存の nightly_price を取得。key=(grade, stay_date, adults) の辞書を返す。"""
+    existing = {}
+    offset = 0
+    limit = 1000
+    base = (supabase_url.rstrip("/")
+            + "/rest/v1/nightly_price"
+              f"?hotel_no=eq.{hotel_no}&stay_date=gte.{date_from}&stay_date=lte.{date_to}"
+              "&select=room_grade,stay_date,adult_num,min_total,is_available"
+              "&order=stay_date.asc")
+    while True:
+        data = supabase_request(f"{base}&limit={limit}&offset={offset}", service_key)
+        for r in data or []:
+            existing[(r["room_grade"], r["stay_date"], r["adult_num"])] = r
+        if not data or len(data) < limit:
+            return existing
+        offset += limit
+
+
+def prune_past(supabase_url, service_key, today_iso):
+    """過去日（今日より前）の価格・履歴を削除して容量を抑える。"""
+    for table in ("nightly_price", "price_history"):
+        url = (supabase_url.rstrip("/")
+               + f"/rest/v1/{table}?stay_date=lt.{today_iso}")
+        supabase_request(url, service_key, method="DELETE")
 
 
 def main():
@@ -212,12 +255,22 @@ def main():
     total_requests = 0
     all_rows = []
     pending = []
+    history_rows = []
+    history_count = 0
     unmatched = {}
     furthest_available = None
     started = time.monotonic()
 
     print(f"取得開始: hotelNo={hotel_no} {dates[0]}〜{dates[-1]} ({len(dates)}日) "
           f"人数={adults_list} dry_run={bool(args.dry_run)}")
+
+    existing = {}
+    if not args.dry_run:
+        # 過去日の掃除 + 変化検出用に既存データを取得
+        prune_past(supabase_url, service_key, today.isoformat())
+        existing = fetch_existing(supabase_url, service_key, hotel_no,
+                                  dates[0].isoformat(), dates[-1].isoformat())
+        print(f"既存データ: {len(existing)}件（変化した価格のみ履歴に記録）")
 
     for d in dates:
         checkin = d.isoformat()
@@ -281,24 +334,46 @@ def main():
                 pending.append(row)
                 all_rows.append(row)
 
+                # 価格か空室状況が前回から変化した時だけ履歴に記録
+                old = existing.get((key, checkin, adults))
+                if old is None or old.get("min_total") != row["min_total"] \
+                        or bool(old.get("is_available")) != row["is_available"]:
+                    history_count += 1
+                    history_rows.append({
+                        "hotel_no": hotel_no,
+                        "room_grade": key,
+                        "stay_date": checkin,
+                        "adult_num": adults,
+                        "min_total": row["min_total"],
+                        "is_available": row["is_available"],
+                        "recorded_at": fetched_at,
+                    })
+
         # 進捗保存: 日単位でまとまったらupsert
         if not args.dry_run and len(pending) >= UPSERT_CHUNK:
-            upsert_rows(supabase_url, service_key, pending)
+            upsert_rows(supabase_url, service_key, "nightly_price", pending,
+                        on_conflict="hotel_no,room_grade,stay_date,adult_num")
             pending = []
+        if not args.dry_run and len(history_rows) >= UPSERT_CHUNK:
+            upsert_rows(supabase_url, service_key, "price_history", history_rows)
+            history_rows = []
 
         if (d - dates[0]).days % 10 == 9:
             elapsed = time.monotonic() - started
             print(f"  進捗: {checkin} まで完了 ({elapsed:.0f}s)")
 
     if not args.dry_run and pending:
-        upsert_rows(supabase_url, service_key, pending)
+        upsert_rows(supabase_url, service_key, "nightly_price", pending,
+                    on_conflict="hotel_no,room_grade,stay_date,adult_num")
+    if not args.dry_run and history_rows:
+        upsert_rows(supabase_url, service_key, "price_history", history_rows)
 
     if args.dry_run:
         with open(args.dry_run, "w", encoding="utf-8") as f:
             json.dump(all_rows, f, ensure_ascii=False, indent=1)
         print(f"dry-run: {len(all_rows)}行を {args.dry_run} に出力")
     else:
-        print(f"upsert完了: {len(all_rows)}行")
+        print(f"upsert完了: {len(all_rows)}行 / 履歴に記録した変化: {history_count}件")
 
     print(f"所要: {time.monotonic() - started:.0f}秒 / 空室データが取れた最遠日: {furthest_available}")
     if unmatched:

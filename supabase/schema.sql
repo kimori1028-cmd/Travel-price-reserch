@@ -25,6 +25,23 @@ create index if not exists nightly_price_lookup
   on public.nightly_price (adult_num, stay_date);
 
 -- ============================================================
+-- 価格履歴（価格や空室状況が「変化した時だけ」バッチが追記）
+-- ============================================================
+create table if not exists public.price_history (
+  id uuid primary key default gen_random_uuid(),
+  hotel_no int not null,
+  room_grade text not null,
+  stay_date date not null,
+  adult_num int not null,
+  min_total int,
+  is_available boolean not null default false,
+  recorded_at timestamptz not null default now()
+);
+
+create index if not exists price_history_lookup
+  on public.price_history (adult_num, stay_date, recorded_at);
+
+-- ============================================================
 -- プロフィール（お気に入り共有時の表示名）
 -- ============================================================
 create table if not exists public.profiles (
@@ -73,12 +90,18 @@ create index if not exists favorites_owner on public.favorites (owner_id);
 -- Row Level Security
 -- ============================================================
 alter table public.nightly_price enable row level security;
+alter table public.price_history enable row level security;
 alter table public.profiles enable row level security;
 alter table public.favorites enable row level security;
 
 -- nightly_price: ログイン済みユーザーは読み取りのみ（書き込みは service role のみ）
 drop policy if exists "nightly_price_read" on public.nightly_price;
 create policy "nightly_price_read" on public.nightly_price
+  for select to authenticated using (true);
+
+-- price_history: ログイン済みユーザーは読み取りのみ（書き込みは service role のみ）
+drop policy if exists "price_history_read" on public.price_history;
+create policy "price_history_read" on public.price_history
   for select to authenticated using (true);
 
 -- profiles: ログイン済みユーザーは全員の表示名を閲覧可、更新は本人のみ
