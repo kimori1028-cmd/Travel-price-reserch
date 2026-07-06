@@ -358,10 +358,14 @@ def main():
     ap.add_argument("--dry-run", metavar="PATH", help="Supabaseに書かずJSONファイルへ出力")
     args = ap.parse_args()
 
-    app_id = os.environ.get("RAKUTEN_APP_ID")
-    access_key = os.environ.get("RAKUTEN_ACCESS_KEY")
+    app_id = (os.environ.get("RAKUTEN_APP_ID") or "").strip()
+    access_key = (os.environ.get("RAKUTEN_ACCESS_KEY") or "").strip()
     if not app_id or not access_key:
         sys.exit("環境変数 RAKUTEN_APP_ID / RAKUTEN_ACCESS_KEY を設定してください。")
+    # Secretの貼り間違い切り分け用(キー本体はログに出さない)
+    print(f"認証情報チェック: APP_ID={app_id[:4]}...({len(app_id)}文字) "
+          f"ACCESS_KEY={access_key[:3]}...({len(access_key)}文字)")
+    print("  期待値: APP_ID=8c45...(36文字) ACCESS_KEY=pk_...(46文字)")
 
     supabase_url = os.environ.get("SUPABASE_URL")
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
