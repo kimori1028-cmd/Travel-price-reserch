@@ -94,10 +94,16 @@ export function openAnaRakupack(checkin: string, nights: number, adults: number)
     nsBinOuro: `Y-${ANA_OUTBOUND_FLIGHT}`,
     nsBinHukuro: `Y-${ANA_RETURN_FLIGHT}`,
   }
+  // 先に空の別ウィンドウを確保してからそこへ送信する。
+  // (target=_blank のフォーム送信だと、環境によってはアプリ自身の画面が
+  //  楽天ページに置き換わり、アプリが終了したように見えるため)
+  const windowName = 'ana_rakupack'
+  const win = window.open('', windowName)
   const form = document.createElement('form')
   form.action = 'https://package.travel.rakuten.co.jp/anafrt/itinerary/'
   form.method = 'POST'
-  form.target = '_blank'
+  form.target = win ? windowName : '_blank'
+  form.rel = 'noopener'
   form.style.display = 'none'
   for (const [name, value] of Object.entries(fields)) {
     const input = document.createElement('input')
