@@ -222,7 +222,12 @@ export default function App() {
 
       <main className="px-3 pt-3">
         {tab === 'calendar' && (
-          <CalendarView index={index} adults={adults} onAddFavorite={handleAddFavorite} />
+          <CalendarView
+            index={index}
+            adults={adults}
+            updated={updated}
+            onAddFavorite={handleAddFavorite}
+          />
         )}
         {tab === 'search' && (
           <SearchView index={index} adults={adults} onAddFavorite={handleAddFavorite} />

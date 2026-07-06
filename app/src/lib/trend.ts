@@ -64,3 +64,32 @@ export function trendStats(points: TrendPoint[]): { min: number; max: number } |
   if (vals.length === 0) return null
   return { min: Math.min(...vals), max: Math.max(...vals) }
 }
+
+export interface RecentChange {
+  dir: 'up' | 'down'
+  /** 変動幅に応じた矢印の本数（1〜3） */
+  arrows: number
+  diff: number
+}
+
+/**
+ * 直近の更新でN泊合計が値上がり/値下がりしたかを返す。
+ * latestMs（データの最終更新時刻）から windowDays 以内に起きた変化のみ対象。
+ * 変動率で矢印を 1本(≥1%)/2本(≥5%)/3本(≥10%) に段階付けする。
+ */
+export function recentTotalChange(
+  points: TrendPoint[],
+  latestMs: number,
+  windowDays = 2,
+): RecentChange | null {
+  if (points.length < 2) return null
+  const last = points[points.length - 1]
+  const prev = points[points.length - 2]
+  if (last.total == null || prev.total == null || prev.total === 0) return null
+  if (latestMs - last.t > windowDays * 86400 * 1000) return null
+  const diff = last.total - prev.total
+  if (diff === 0) return null
+  const pct = Math.abs(diff) / prev.total
+  const arrows = pct >= 0.1 ? 3 : pct >= 0.05 ? 2 : 1
+  return { dir: diff > 0 ? 'up' : 'down', arrows, diff }
+}

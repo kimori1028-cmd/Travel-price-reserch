@@ -1,16 +1,19 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { stayQuote, type PriceIndex, type StayQuote } from '../lib/calc'
-import { monthGrid, todayISO, WEEKDAY_LABELS } from '../lib/dates'
+import { addDays, monthGrid, todayISO, WEEKDAY_LABELS } from '../lib/dates'
+import { loadHistoryRange, type HistoryEvent } from '../lib/history'
+import { buildTrend, recentTotalChange } from '../lib/trend'
 import { GRADES, NIGHT_OPTIONS, type GradeKey } from '../lib/types'
 import { DayDetail } from './DayDetail'
 
 interface Props {
   index: PriceIndex
   adults: number
+  updated: string | null
   onAddFavorite: (grade: GradeKey, checkin: string, nights: number, total: number | null) => void
 }
 
-export function CalendarView({ index, adults, onAddFavorite }: Props) {
+export function CalendarView({ index, adults, updated, onAddFavorite }: Props) {
   const today = todayISO()
   const [cursor, setCursor] = useState(() => {
     const [y, m] = today.split('-').map(Number)
@@ -32,6 +35,52 @@ export function CalendarView({ index, adults, onAddFavorite }: Props) {
   const weeks = useMemo(() => monthGrid(cursor.year, cursor.month0), [cursor])
   const shownGrades = useMemo(() => GRADES.filter((g) => selected.includes(g.key)), [selected])
   const multi = shownGrades.length > 1
+
+  // 表示月+最大泊数ぶんの価格履歴をロード（値上がり/値下がり矢印の算出用）
+  const [history, setHistory] = useState<HistoryEvent[]>([])
+  useEffect(() => {
+    const days = weeks.flat().filter((d): d is string => !!d)
+    if (days.length === 0) return
+    const from = days[0]
+    const to = addDays(days[days.length - 1], 4)
+    let alive = true
+    loadHistoryRange(from, to, adults).then((evs) => {
+      if (alive) setHistory(evs)
+    })
+    return () => {
+      alive = false
+    }
+  }, [weeks, adults])
+
+  const eventsByGrade = useMemo(() => {
+    const map = new Map<GradeKey, HistoryEvent[]>()
+    for (const e of history) {
+      const arr = map.get(e.room_grade)
+      if (arr) arr.push(e)
+      else map.set(e.room_grade, [e])
+    }
+    return map
+  }, [history])
+
+  const latestMs = useMemo(() => (updated ? Date.parse(updated) : Date.now()), [updated])
+
+  // (grade, 発日) → 直近の変化（矢印）
+  const changes = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof recentTotalChange>>()
+    for (const week of weeks) {
+      for (const day of week) {
+        if (!day || day < today) continue
+        const nightDates = Array.from({ length: nights }, (_, i) => addDays(day, i))
+        const nightSet = new Set(nightDates)
+        for (const g of shownGrades) {
+          const evs = (eventsByGrade.get(g.key) ?? []).filter((e) => nightSet.has(e.stay_date))
+          const change = recentTotalChange(buildTrend(evs, nightDates), latestMs)
+          if (change) map.set(`${g.key}|${day}`, change)
+        }
+      }
+    }
+    return map
+  }, [weeks, shownGrades, eventsByGrade, nights, latestMs, today])
 
   const quotes = useMemo(() => {
     const map = new Map<string, StayQuote>()
@@ -185,9 +234,24 @@ export function CalendarView({ index, adults, onAddFavorite }: Props) {
                         >
                           {multi && <span className={`${g.color} font-bold`}>{g.letter}</span>}
                           {q?.status === 'ok' ? (
-                            <span className={isMin ? 'text-emerald-600' : 'text-slate-700'}>
-                              ¥{q.total.toLocaleString('ja-JP')}
-                            </span>
+                            <>
+                              <span className={isMin ? 'text-emerald-600' : 'text-slate-700'}>
+                                ¥{q.total.toLocaleString('ja-JP')}
+                              </span>
+                              {(() => {
+                                const c = changes.get(`${g.key}|${day}`)
+                                if (!c) return null
+                                return (
+                                  <span
+                                    className={`font-bold ${
+                                      c.dir === 'up' ? 'text-rose-500' : 'text-emerald-600'
+                                    }`}
+                                  >
+                                    {(c.dir === 'up' ? '↑' : '↓').repeat(c.arrows)}
+                                  </span>
+                                )
+                              })()}
+                            </>
                           ) : q?.status === 'unavailable' ? (
                             <span className="font-normal text-rose-300">×</span>
                           ) : (
@@ -208,7 +272,9 @@ export function CalendarView({ index, adults, onAddFavorite }: Props) {
       <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
         ※ 表示は<b>朝食付きプラン</b>の最安値を「発日から{nights}泊」分合算した<b>参考価格</b>です。
         {multi && ' V=ヴィラ / S=スーペリア / P=パティオ。'}
-        <span className="text-emerald-600">緑の金額</span>は表示月内の最安日。連泊プラン等により実際の予約価格と異なる場合があります。× = 期間中に満室の夜あり / – = 未取得・受付前。
+        <span className="text-emerald-600">緑の金額</span>は表示月内の最安日。
+        <span className="text-rose-500">↑</span>値上がり／<span className="text-emerald-600">↓</span>値下がり（直近の更新・矢印が多いほど変動大）。
+        連泊プラン等により実際の予約価格と異なる場合があります。× = 期間中に満室の夜あり / – = 未取得・受付前。
       </p>
 
       {selectedDay && (
