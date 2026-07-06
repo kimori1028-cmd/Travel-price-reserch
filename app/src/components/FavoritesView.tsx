@@ -1,5 +1,5 @@
 import { stayQuote, type PriceIndex } from '../lib/calc'
-import { fmtDateJa, fmtYen } from '../lib/dates'
+import { fmtDateJa, fmtMan, fmtYen } from '../lib/dates'
 import { gradeDef, type Favorite } from '../lib/types'
 
 interface Props {
@@ -113,14 +113,16 @@ export function FavoritesView({
               <button
                 type="button"
                 onClick={() => onToggleNotify(f)}
-                title="値下がり時にメール通知"
+                title="指定金額以下になったらメール通知"
                 className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold ${
-                  f.notify_on_drop
+                  f.notify_on_drop && f.notify_threshold != null
                     ? 'border-amber-500 bg-amber-50 text-amber-600'
                     : 'border-slate-300 text-slate-500'
                 }`}
               >
-                {f.notify_on_drop ? '📧 通知ON' : '📧 通知'}
+                {f.notify_on_drop && f.notify_threshold != null
+                  ? `📧 ${fmtMan(f.notify_threshold)}以下`
+                  : '📧 通知'}
               </button>
               <button
                 type="button"
@@ -154,7 +156,7 @@ export function FavoritesView({
       <p className="text-[11px] leading-relaxed text-slate-400">
         ・チェックイン日を過ぎたお気に入りは自動的に削除されます。
         <br />
-        ・「📧 通知」をONにすると、参考価格がこれまでの最安値を下回った時にメールが届きます
+        ・「📧 通知」で金額を設定すると、参考価格がその金額以下になった時にメールが届きます
         （メール送信の設定がされている場合）。お気に入りの日程は1時間ごとに価格チェックされます。
       </p>
     </div>

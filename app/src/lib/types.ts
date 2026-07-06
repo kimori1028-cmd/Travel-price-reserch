@@ -61,6 +61,7 @@ export interface Favorite {
   price_at_saved: number | null
   lowest_total: number | null
   notify_on_drop: boolean
+  notify_threshold: number | null
   is_shared: boolean
   created_at: string
   /** 表示用（profiles から解決） */

@@ -82,6 +82,8 @@ create table if not exists public.favorites (
   price_at_saved int,
   lowest_total int,
   notify_on_drop boolean not null default false,
+  notify_threshold int,
+  last_notified_total int,
   is_shared boolean not null default false,
   created_at timestamptz not null default now()
 );

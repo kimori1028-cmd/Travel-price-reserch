@@ -60,6 +60,7 @@ export async function addFavorite(userId: string | null, fav: NewFavorite): Prom
       note: null,
       lowest_total: fav.price_at_saved,
       notify_on_drop: false,
+      notify_threshold: null,
       is_shared: false,
       created_at: new Date().toISOString(),
     })
@@ -72,12 +73,18 @@ export async function addFavorite(userId: string | null, fav: NewFavorite): Prom
   if (error) throw new Error(`お気に入りの追加に失敗: ${error.message}`)
 }
 
-export async function setNotify(id: string, on: boolean): Promise<void> {
+export async function setNotify(
+  id: string,
+  on: boolean,
+  threshold: number | null,
+): Promise<void> {
+  // 設定変更時は「通知済み価格」をリセットして、次にしきい値を下回れば必ず通知されるようにする
+  const patch = { notify_on_drop: on, notify_threshold: threshold, last_notified_total: null }
   if (isDemo || !supabase) {
-    saveLocal(loadLocal().map((f) => (f.id === id ? { ...f, notify_on_drop: on } : f)))
+    saveLocal(loadLocal().map((f) => (f.id === id ? { ...f, ...patch } : f)))
     return
   }
-  const { error } = await supabase.from('favorites').update({ notify_on_drop: on }).eq('id', id)
+  const { error } = await supabase.from('favorites').update(patch).eq('id', id)
   if (error) throw new Error(`通知設定の変更に失敗: ${error.message}`)
 }
 

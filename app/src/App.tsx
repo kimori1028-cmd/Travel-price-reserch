@@ -106,10 +106,39 @@ export default function App() {
     }
   }
 
+  const askThreshold = (fav: Favorite): number | null => {
+    const suggestion = fav.notify_threshold ?? fav.lowest_total ?? fav.price_at_saved
+    const input = window.prompt(
+      'いくら以下になったら通知しますか？（円・数字のみ）',
+      suggestion != null ? String(suggestion) : '',
+    )
+    if (input == null) return null
+    const value = parseInt(input.replace(/[^\d]/g, ''), 10)
+    if (!value || value <= 0) {
+      showToast('金額を数字で入力してください')
+      return null
+    }
+    return value
+  }
+
   const handleToggleNotify = async (fav: Favorite) => {
     try {
-      await setNotify(fav.id, !fav.notify_on_drop)
-      if (!fav.notify_on_drop) showToast('📧 値下がり時にメールで通知します')
+      if (fav.notify_on_drop) {
+        if (window.confirm('値下がり通知をOFFにしますか？\n（キャンセルすると通知金額を変更できます）')) {
+          await setNotify(fav.id, false, null)
+          showToast('通知をOFFにしました')
+        } else {
+          const value = askThreshold(fav)
+          if (value == null) return
+          await setNotify(fav.id, true, value)
+          showToast(`📧 ${value.toLocaleString('ja-JP')}円以下になったら通知します`)
+        }
+      } else {
+        const value = askThreshold(fav)
+        if (value == null) return
+        await setNotify(fav.id, true, value)
+        showToast(`📧 ${value.toLocaleString('ja-JP')}円以下になったら通知します`)
+      }
       reloadFavorites()
     } catch (e) {
       showToast(String((e as Error).message ?? e))
