@@ -22,6 +22,26 @@ export function SearchView({ index, adults, onAddFavorite }: Props) {
   const [toMonth, setToMonth] = useState(addDays(today, 365).slice(0, 7))
   const [searched, setSearched] = useState(false)
 
+  // 今月〜13ヶ月先までの月の選択肢（"YYYY-MM"）
+  const monthOptions = useMemo(() => {
+    const options: string[] = []
+    let [y, m] = today.split('-').map(Number)
+    for (let i = 0; i <= 13; i++) {
+      options.push(`${y}-${String(m).padStart(2, '0')}`)
+      m += 1
+      if (m > 12) {
+        m = 1
+        y += 1
+      }
+    }
+    return options
+  }, [today])
+
+  const fmtMonthJa = (ym: string) => {
+    const [y, m] = ym.split('-').map(Number)
+    return `${y}年${m}月`
+  }
+
   const results = useMemo(() => {
     if (!searched) return []
     // 月指定 → 実際の日付範囲へ（開始月は今日以降、終了月は月末まで）
@@ -92,27 +112,38 @@ export function SearchView({ index, adults, onAddFavorite }: Props) {
         <div>
           <div className="mb-1.5 text-xs font-bold text-slate-500">検索期間（月単位）</div>
           <div className="flex items-center gap-2">
-            <input
-              type="month"
+            <select
               value={fromMonth}
-              min={today.slice(0, 7)}
               onChange={(e) => {
                 setFromMonth(e.target.value)
+                if (toMonth < e.target.value) setToMonth(e.target.value)
                 setSearched(false)
               }}
-              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-2 text-sm"
-            />
+              className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm"
+            >
+              {monthOptions.map((ym) => (
+                <option key={ym} value={ym}>
+                  {fmtMonthJa(ym)}
+                </option>
+              ))}
+            </select>
             <span className="text-slate-400">〜</span>
-            <input
-              type="month"
+            <select
               value={toMonth}
-              min={fromMonth}
               onChange={(e) => {
                 setToMonth(e.target.value)
                 setSearched(false)
               }}
-              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-2 text-sm"
-            />
+              className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm"
+            >
+              {monthOptions
+                .filter((ym) => ym >= fromMonth)
+                .map((ym) => (
+                  <option key={ym} value={ym}>
+                    {fmtMonthJa(ym)}
+                  </option>
+                ))}
+            </select>
           </div>
         </div>
 
