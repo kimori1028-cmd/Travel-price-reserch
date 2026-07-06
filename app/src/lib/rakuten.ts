@@ -37,28 +37,18 @@ export function rakutenPlanUrl(checkin: string, nights: number, adults: number):
 }
 
 /**
- * ANA楽パック（航空券+宿泊）の旅程ページを、日付・人数・便名
- * （往路ANA89 / 復路ANA92）を選択済みの状態で新しいタブに開く。
- * 楽パックの検索はGETリンク不可（POST必須）のため、フォームを組み立てて送信する。
+ * ANA楽パック（航空券+宿泊）のプラン一覧URL。
+ * 日付・羽田⇔石垣・人数・1室 と希望便（往路ANA89/復路ANA92）を
+ * 設定した状態で開く。便の希望はプラン選択後のフライト画面に引き継がれる。
+ * ※旅程ページへの直接POSTはセッションが無いと拒否されるため、
+ *   正規の入口であるプラン一覧をGETで開く方式にしている。
  */
-export function openAnaRakupack(checkin: string, nights: number, adults: number): void {
+export function anaRakupackUrl(checkin: string, nights: number, adults: number): string {
   const checkout = addDays(checkin, nights)
   const [y1, m1, d1] = checkin.split('-').map(Number)
   const [y2, m2, d2] = checkout.split('-').map(Number)
-  const fields: Record<string, string> = {
-    searchType: 'plan',
-    sortType: '7',
-    noPage: '1',
-    isResearch: 'false',
-    hotelNo: HOTEL_NO,
+  const params = new URLSearchParams({
     noTomariHotel: HOTEL_NO,
-    roomClass: '',
-    planId: '',
-    cdDepartureStationG: '',
-    cdArrivalStationG: '',
-    cdDepartureStationR: '',
-    cdArrivalStationR: '',
-    ddp_vs: '',
     dHatuToujyouYy: String(y1),
     dHatuToujyouMm: String(m1),
     dHatuToujyouDd: String(d1),
@@ -75,44 +65,10 @@ export function openAnaRakupack(checkin: string, nights: number, adults: number)
     dCheckOutYy: String(y2),
     dCheckOutMm: String(m2),
     dCheckOutDd: String(d2),
-    cdTomariTiikiKen: 'okinawa',
-    cdTomariTiiki: 'ritou',
     suOtona: String(adults),
-    suSyogakkouKougakunen: '0',
-    suSyogakkouTeigakunen: '0',
-    suYouziSyokuziFutonTuki: '0',
-    suYouziSyokuziNomi: '0',
-    suYouziFutonNomi: '0',
-    suYouziSyokuziFutonFuyou: '0',
-    suNyuYouzi: '0',
     suTomariHeya: '1',
-    cdAlliance: '',
-    cdAffiliate: '',
-    fDptab: '',
-    fRcUmu: '0',
-    smartFlg: '',
     nsBinOuro: `Y-${ANA_OUTBOUND_FLIGHT}`,
     nsBinHukuro: `Y-${ANA_RETURN_FLIGHT}`,
-  }
-  // 先に空の別ウィンドウを確保してからそこへ送信する。
-  // (target=_blank のフォーム送信だと、環境によってはアプリ自身の画面が
-  //  楽天ページに置き換わり、アプリが終了したように見えるため)
-  const windowName = 'ana_rakupack'
-  const win = window.open('', windowName)
-  const form = document.createElement('form')
-  form.action = 'https://package.travel.rakuten.co.jp/anafrt/itinerary/'
-  form.method = 'POST'
-  form.target = win ? windowName : '_blank'
-  form.rel = 'noopener'
-  form.style.display = 'none'
-  for (const [name, value] of Object.entries(fields)) {
-    const input = document.createElement('input')
-    input.type = 'hidden'
-    input.name = name
-    input.value = value
-    form.appendChild(input)
-  }
-  document.body.appendChild(form)
-  form.submit()
-  window.setTimeout(() => form.remove(), 1000)
+  })
+  return `https://package.travel.rakuten.co.jp/anafrt/planList/hotelPlanList?${params.toString()}`
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { stayQuote, type PriceIndex } from '../lib/calc'
 import { addDays, fmtDateJa, fmtDateShort, fmtYen } from '../lib/dates'
 import { loadHistory, type HistoryEvent } from '../lib/history'
-import { openAnaRakupack, rakutenPlanUrl } from '../lib/rakuten'
+import { anaRakupackUrl, rakutenPlanUrl } from '../lib/rakuten'
 import { buildTrend, trendStats } from '../lib/trend'
 import { GRADES, type GradeKey } from '../lib/types'
 import { TrendChart } from './TrendChart'
@@ -145,13 +145,14 @@ export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavori
                       >
                         サイトで確認
                       </a>
-                      <button
-                        type="button"
-                        onClick={() => openAnaRakupack(checkin, nights, adults)}
+                      <a
+                        href={anaRakupackUrl(checkin, nights, adults)}
+                        target="_blank"
+                        rel="noreferrer"
                         className="flex-1 rounded-lg bg-sky-700 py-2 text-center text-[11px] font-bold leading-relaxed text-white"
                       >
                         ANA楽パックで確認
-                      </button>
+                      </a>
                       <button
                         type="button"
                         onClick={() => onAddFavorite(g.key, checkin, nights, q.total)}
