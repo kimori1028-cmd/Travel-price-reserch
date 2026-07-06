@@ -9,14 +9,18 @@
   → 返ってきた合計が 76,440 側なら「反映されない」、71,854 側なら「反映される」。
 
 使い方:
-  export RAKUTEN_APP_ID="あなたのアプリID"
+  export RAKUTEN_APP_ID="あなたのアプリID (UUID形式)"
+  export RAKUTEN_ACCESS_KEY="あなたのアクセスキー (pk_ で始まる)"
   python rakuten_price_check.py
   # 生JSONも見たい場合:
   python rakuten_price_check.py --raw
 
 注意:
-  - 認証は applicationId のみ。会員ログインを渡す手段はAPIに無い。
-  - 短時間に同一URLへ大量アクセスすると一時的に制限される場合がある。
+  - 2026年2月のAPI刷新後の新仕様 (openapi.rakuten.co.jp) に対応。
+    applicationId (UUID) と accessKey の両方が必須。
+  - アプリ登録時の Allowed IP addresses に実行元のIPが含まれている必要がある。
+  - 会員ログインを渡す手段はAPIに無い。
+  - リクエスト間隔は1.5秒以上空けること (429 Too Many Requests になる)。
 """
 
 import argparse
@@ -26,17 +30,19 @@ import sys
 import urllib.parse
 import urllib.request
 
-ENDPOINT = "https://app.rakuten.co.jp/services/api/Travel/VacantHotelSearch/20170426"
+ENDPOINT = "https://openapi.rakuten.co.jp/engine/api/Travel/VacantHotelSearch/20170426"
+REFERER = "https://github.com/kimori1028-cmd/Travel-price-reserch"
 
 # ページ表示の参照値（大人2人/2泊/1室）
 REF_BEFORE_DISCOUNT = 76440  # 会員限定割引 前
 REF_AFTER_DISCOUNT = 71854   # 会員限定割引 後 (-4,586)
 
 
-def fetch(app_id, hotel_no, checkin, checkout, adult_num, squeeze):
+def fetch(app_id, access_key, hotel_no, checkin, checkout, adult_num, squeeze):
     params = {
         "format": "json",
         "applicationId": app_id,
+        "accessKey": access_key,
         "hotelNo": hotel_no,
         "checkinDate": checkin,
         "checkoutDate": checkout,
@@ -45,9 +51,20 @@ def fetch(app_id, hotel_no, checkin, checkout, adult_num, squeeze):
         "sort": "+roomCharge",
     }
     url = ENDPOINT + "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"User-Agent": "price-check/1.0"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    headers = {
+        "User-Agent": "price-check/1.0",
+        "Referer": REFERER,  # 新APIはReferer/Originが無いと403になる
+    }
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        try:
+            return json.loads(body)
+        except ValueError:
+            raise RuntimeError(f"HTTP {e.code}: {body[:500]}") from e
 
 
 def extract_plans(data):
@@ -101,14 +118,20 @@ def main():
     app_id = os.environ.get("RAKUTEN_APP_ID")
     if not app_id:
         sys.exit("環境変数 RAKUTEN_APP_ID が未設定です。 export RAKUTEN_APP_ID=... を実行してください。")
+    access_key = os.environ.get("RAKUTEN_ACCESS_KEY")
+    if not access_key:
+        sys.exit("環境変数 RAKUTEN_ACCESS_KEY が未設定です。 export RAKUTEN_ACCESS_KEY=pk_... を実行してください。")
 
     try:
-        data = fetch(app_id, args.hotel_no, args.checkin, args.checkout, args.adults, args.squeeze)
+        data = fetch(app_id, access_key, args.hotel_no, args.checkin, args.checkout, args.adults, args.squeeze)
     except Exception as e:
         sys.exit(f"リクエスト失敗: {e}")
 
     if isinstance(data, dict) and data.get("error"):
         sys.exit(f"APIエラー: {data.get('error')} / {data.get('error_description')}")
+    if isinstance(data, dict) and data.get("errors"):
+        err = data["errors"]
+        sys.exit(f"APIエラー: {err.get('errorCode')} / {err.get('errorMessage')}")
 
     if args.raw:
         print(json.dumps(data, ensure_ascii=False, indent=2))

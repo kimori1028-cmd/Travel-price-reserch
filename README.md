@@ -9,8 +9,12 @@
 
 ## 使い方
 
+2026年2月の楽天ウェブサービス刷新後の新API（`openapi.rakuten.co.jp`）に対応しています。
+アプリID（UUID形式）とアクセスキー（`pk_` で始まる）の両方が必要です。
+
 ```bash
-export RAKUTEN_APP_ID="あなたのアプリID"
+export RAKUTEN_APP_ID="あなたのアプリID（UUID形式）"
+export RAKUTEN_ACCESS_KEY="あなたのアクセスキー（pk_...）"
 python3 rakuten_price_check.py
 
 # 生JSONも見たい場合
@@ -30,6 +34,8 @@ python3 rakuten_price_check.py --raw
 
 ## 注意
 
-- 認証は `applicationId` のみ。会員ログインをAPIに渡す手段はありません。
-- 短時間に同一URLへ大量アクセスすると一時的に制限される場合があります。
+- アプリ登録時の「Allowed IP addresses」に、スクリプトを実行するマシンのグローバルIPが含まれている必要があります。
+- 新APIは `Referer` または `Origin` ヘッダーが必須です（スクリプトが自動で付与します）。
+- リクエスト間隔は1.5秒以上空けてください（超えると 429 Too Many Requests）。
+- 会員ログインをAPIに渡す手段はありません。
 - 標準ライブラリのみで動作します（追加パッケージ不要、Python 3 が必要）。
