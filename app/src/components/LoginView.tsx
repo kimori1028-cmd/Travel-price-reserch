@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 export function LoginView() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [show, setShow] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -56,16 +57,25 @@ export function LoginView() {
             autoComplete="email"
           />
         </label>
-        <label className="mb-4 block">
+        <label className="mb-2 block">
           <span className="text-xs font-bold text-slate-500">パスワード</span>
           <input
-            type="password"
+            type={show ? 'text' : 'password'}
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
             autoComplete="current-password"
           />
+        </label>
+        <label className="mb-4 flex items-center gap-2 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={show}
+            onChange={(e) => setShow(e.target.checked)}
+            className="h-4 w-4 accent-teal-600"
+          />
+          パスワードを表示する
         </label>
         {error && <p className="mb-3 text-xs text-rose-500">{error}</p>}
         {notice && <p className="mb-3 text-xs text-teal-600">{notice}</p>}

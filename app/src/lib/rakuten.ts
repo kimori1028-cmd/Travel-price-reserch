@@ -74,6 +74,7 @@ export function anaRakupackUrl(
     suTomariHeya: '1',
     nsBinOuro: `Y-${ANA_OUTBOUND_FLIGHT}`,
     nsBinHukuro: `Y-${returnFlight}`,
+    fRcUmu: '1', // レンタカー付きで検索
   })
   return `https://package.travel.rakuten.co.jp/anafrt/planList/hotelPlanList?${params.toString()}`
 }

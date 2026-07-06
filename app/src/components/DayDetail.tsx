@@ -155,7 +155,7 @@ export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavori
                     </div>
                     <div className="mt-1.5">
                       <div className="mb-1 text-[10px] font-bold text-slate-500">
-                        ANA楽パックで確認（行き ANA89便・8時発）
+                        ANA楽パックで確認（行き ANA89便 8時発・レンタカー付き）
                       </div>
                       <div className="flex gap-1.5">
                         <a

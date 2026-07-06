@@ -9,6 +9,7 @@ interface Props {
 export function SetPasswordView({ onDone }: Props) {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [show, setShow] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -45,7 +46,7 @@ export function SetPasswordView({ onDone }: Props) {
         <label className="mb-3 block">
           <span className="text-xs font-bold text-slate-500">新しいパスワード（8文字以上）</span>
           <input
-            type="password"
+            type={show ? 'text' : 'password'}
             required
             minLength={8}
             value={password}
@@ -54,10 +55,10 @@ export function SetPasswordView({ onDone }: Props) {
             autoComplete="new-password"
           />
         </label>
-        <label className="mb-4 block">
+        <label className="mb-2 block">
           <span className="text-xs font-bold text-slate-500">新しいパスワード（確認）</span>
           <input
-            type="password"
+            type={show ? 'text' : 'password'}
             required
             minLength={8}
             value={confirm}
@@ -65,6 +66,15 @@ export function SetPasswordView({ onDone }: Props) {
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
             autoComplete="new-password"
           />
+        </label>
+        <label className="mb-4 flex items-center gap-2 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={show}
+            onChange={(e) => setShow(e.target.checked)}
+            className="h-4 w-4 accent-teal-600"
+          />
+          パスワードを表示する
         </label>
         {error && <p className="mb-3 text-xs text-rose-500">{error}</p>}
         <button
