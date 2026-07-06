@@ -414,6 +414,8 @@ def main():
     latest = {}  # (grade, stay_date, adults) -> {min_total, is_available}
     unmatched = {}
     furthest_available = None
+    success_count = 0
+    fail_streak = 0
     started = time.monotonic()
 
     existing = {}
@@ -431,7 +433,16 @@ def main():
             entries = fetch_one_night(app_id, access_key, hotel_no, checkin, checkout, adults)
         except Exception as e:
             print(f"  {checkin} adults={adults}: 取得失敗 {e}", file=sys.stderr)
+            fail_streak += 1
+            if success_count == 0 and fail_streak >= 10:
+                sys.exit(
+                    "エラー: 最初の10リクエストがすべて失敗しました。処理を中断します。\n"
+                    "403 (Invalid Access Key) の場合は、楽天アプリの設定で\n"
+                    "Allowed IP addresses に 0.0.0.0/0 が登録されているか確認してください\n"
+                    "(GitHub ActionsのIPは毎回変わるため、全IP許可が必要です)。")
             continue
+        success_count += 1
+        fail_streak = 0
 
         best = {}  # grade_key -> (total, basic, charge)
         for basic, charge in entries:
@@ -538,6 +549,8 @@ def main():
         print("グレード未分類のroomClass(マッチャ調整の参考):")
         for rc, rn in unmatched.items():
             print(f"  {rc}: {rn}")
+    if pairs and success_count == 0:
+        sys.exit("エラー: 全リクエストが失敗しました(成功0件)。上記のエラーを確認してください。")
 
 
 if __name__ == "__main__":
