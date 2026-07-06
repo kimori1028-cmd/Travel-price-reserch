@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { stayQuote, type PriceIndex } from '../lib/calc'
 import { fmtMan, monthGrid, todayISO, WEEKDAY_LABELS } from '../lib/dates'
 import { GRADES, NIGHT_OPTIONS, type GradeKey } from '../lib/types'
@@ -47,6 +47,24 @@ export function CalendarView({ index, adults, onAddFavorite }: Props) {
     })
   }
 
+  // 左右スワイプで月移動（縦スクロールと区別するため横方向が優位な時だけ）
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0]
+    touchStart.current = { x: t.clientX, y: t.clientY }
+  }
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStart.current
+    touchStart.current = null
+    if (!start) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      moveMonth(dx < 0 ? 1 : -1)
+    }
+  }
+
   return (
     <div className="pb-4">
       {/* 泊数プルダウン + グレードタブ */}
@@ -78,7 +96,8 @@ export function CalendarView({ index, adults, onAddFavorite }: Props) {
         </div>
       </div>
 
-      {/* 月ナビ */}
+      {/* 月ナビ + カレンダー（左右スワイプで月移動） */}
+      <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <div className="mb-1 flex items-center justify-between">
         <button
           type="button"
@@ -152,6 +171,7 @@ export function CalendarView({ index, adults, onAddFavorite }: Props) {
             })}
           </div>
         ))}
+      </div>
       </div>
 
       <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
