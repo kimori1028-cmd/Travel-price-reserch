@@ -2,9 +2,9 @@ import { addDays } from './dates'
 
 const HOTEL_NO = '38599'
 
-// ANA楽パックの固定フライト設定（羽田⇔石垣 直行便）
-const ANA_OUTBOUND_FLIGHT = '89' // 往路: ANA89 (HND→ISG)
-const ANA_RETURN_FLIGHT = '92'   // 復路: ANA92 (ISG→HND)
+// ANA楽パックのフライト設定（羽田⇔石垣 直行便）
+const ANA_OUTBOUND_FLIGHT = '89' // 往路: ANA89 (羽田8時発)
+export type AnaReturnFlight = '90' | '92' // 復路: ANA90(12時発) / ANA92(15時発)
 const DEP_AIRPORT = 'HND'
 const ARR_AIRPORT = 'ISG'
 
@@ -43,7 +43,12 @@ export function rakutenPlanUrl(checkin: string, nights: number, adults: number):
  * ※旅程ページへの直接POSTはセッションが無いと拒否されるため、
  *   正規の入口であるプラン一覧をGETで開く方式にしている。
  */
-export function anaRakupackUrl(checkin: string, nights: number, adults: number): string {
+export function anaRakupackUrl(
+  checkin: string,
+  nights: number,
+  adults: number,
+  returnFlight: AnaReturnFlight,
+): string {
   const checkout = addDays(checkin, nights)
   const [y1, m1, d1] = checkin.split('-').map(Number)
   const [y2, m2, d2] = checkout.split('-').map(Number)
@@ -68,7 +73,7 @@ export function anaRakupackUrl(checkin: string, nights: number, adults: number):
     suOtona: String(adults),
     suTomariHeya: '1',
     nsBinOuro: `Y-${ANA_OUTBOUND_FLIGHT}`,
-    nsBinHukuro: `Y-${ANA_RETURN_FLIGHT}`,
+    nsBinHukuro: `Y-${returnFlight}`,
   })
   return `https://package.travel.rakuten.co.jp/anafrt/planList/hotelPlanList?${params.toString()}`
 }

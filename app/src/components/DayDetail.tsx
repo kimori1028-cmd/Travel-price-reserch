@@ -141,25 +141,40 @@ export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavori
                         href={rakutenPlanUrl(checkin, nights, adults)}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex-1 rounded-lg bg-rose-500 py-2 text-center text-[11px] font-bold leading-relaxed text-white"
+                        className="flex-1 rounded-lg bg-rose-500 py-2 text-center text-xs font-bold leading-relaxed text-white"
                       >
                         サイトで確認
-                      </a>
-                      <a
-                        href={anaRakupackUrl(checkin, nights, adults)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex-1 rounded-lg bg-sky-700 py-2 text-center text-[11px] font-bold leading-relaxed text-white"
-                      >
-                        ANA楽パックで確認
                       </a>
                       <button
                         type="button"
                         onClick={() => onAddFavorite(g.key, checkin, nights, q.total)}
-                        className="rounded-lg border border-amber-400 bg-amber-50 px-2.5 py-2 text-[11px] font-bold text-amber-600"
+                        className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-600"
                       >
                         ★ 保存
                       </button>
+                    </div>
+                    <div className="mt-1.5">
+                      <div className="mb-1 text-[10px] font-bold text-slate-500">
+                        ANA楽パックで確認（行き ANA89便・8時発）
+                      </div>
+                      <div className="flex gap-1.5">
+                        <a
+                          href={anaRakupackUrl(checkin, nights, adults, '90')}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex-1 rounded-lg bg-sky-700 py-2 text-center text-[11px] font-bold leading-relaxed text-white"
+                        >
+                          帰り 90便（12時発）
+                        </a>
+                        <a
+                          href={anaRakupackUrl(checkin, nights, adults, '92')}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex-1 rounded-lg bg-sky-700 py-2 text-center text-[11px] font-bold leading-relaxed text-white"
+                        >
+                          帰り 92便（15時発）
+                        </a>
+                      </div>
                     </div>
                   </>
                 )}
