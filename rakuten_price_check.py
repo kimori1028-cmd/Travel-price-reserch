@@ -20,25 +20,31 @@
     applicationId (UUID) と accessKey の両方が必須。
   - アプリ登録時の Allowed IP addresses に実行元のIPが含まれている必要がある。
   - 会員ログインを渡す手段はAPIに無い。
+  - 複数泊で問い合わせてもAPIは初泊のdailyChargeしか返さないため、
+    このスクリプトは1泊ずつ問い合わせてプラン別に合算する。
   - リクエスト間隔は1.5秒以上空けること (429 Too Many Requests になる)。
 """
 
 import argparse
+import datetime
 import json
 import os
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
 ENDPOINT = "https://openapi.rakuten.co.jp/engine/api/Travel/VacantHotelSearch/20170426"
 REFERER = "https://github.com/kimori1028-cmd/Travel-price-reserch"
+REQUEST_INTERVAL_SEC = 2.0  # 新APIのレート制限 (1.5秒以上) を守る
 
 # ページ表示の参照値（大人2人/2泊/1室）
 REF_BEFORE_DISCOUNT = 76440  # 会員限定割引 前
 REF_AFTER_DISCOUNT = 71854   # 会員限定割引 後 (-4,586)
 
 
-def fetch(app_id, access_key, hotel_no, checkin, checkout, adult_num, squeeze):
+def fetch(app_id, access_key, hotel_no, checkin, checkout, adult_num, squeeze, page=1):
     params = {
         "format": "json",
         "applicationId": app_id,
@@ -48,6 +54,8 @@ def fetch(app_id, access_key, hotel_no, checkin, checkout, adult_num, squeeze):
         "checkoutDate": checkout,
         "adultNum": adult_num,
         "squeezeCondition": squeeze,   # breakfast など
+        "searchPattern": 1,            # 宿泊プランごと
+        "page": page,
         "sort": "+roomCharge",
     }
     url = ENDPOINT + "?" + urllib.parse.urlencode(params)
@@ -67,32 +75,59 @@ def fetch(app_id, access_key, hotel_no, checkin, checkout, adult_num, squeeze):
             raise RuntimeError(f"HTTP {e.code}: {body[:500]}") from e
 
 
-def extract_plans(data):
-    """各プランごとに planName / roomName / 各泊のtotal / 合計 を取り出す。"""
-    plans = []
+def check_api_error(data):
+    if isinstance(data, dict) and data.get("error"):
+        sys.exit(f"APIエラー: {data.get('error')} / {data.get('error_description')}")
+    if isinstance(data, dict) and data.get("errors"):
+        err = data["errors"]
+        sys.exit(f"APIエラー: {err.get('errorCode')} / {err.get('errorMessage')}")
+
+
+def iter_room_entries(data):
+    """レスポンス中の (roomBasicInfo, dailyCharge) の組を順に返す。"""
     for hotel_wrap in data.get("hotels", []):
-        hotel = hotel_wrap.get("hotel", [])
-        for entry in hotel:
+        for entry in hotel_wrap.get("hotel", []):
             room_info = entry.get("roomInfo")
             if not room_info:
                 continue
             room_basic = {}
-            charges = []
             for item in room_info:
                 if "roomBasicInfo" in item:
                     room_basic = item["roomBasicInfo"]
                 if "dailyCharge" in item:
-                    charges.append(item["dailyCharge"])
-            totals = [c.get("total") for c in charges if c.get("total") is not None]
-            plans.append({
-                "planName": room_basic.get("planName"),
-                "roomName": room_basic.get("roomName"),
-                "planId": room_basic.get("planId"),
-                "withBreakfastFlag": room_basic.get("withBreakfastFlag"),
-                "nights": [(c.get("stayDate"), c.get("total")) for c in charges],
-                "sum_total": sum(totals) if totals else None,
-            })
-    return plans
+                    yield room_basic, item["dailyCharge"]
+
+
+def fetch_all_pages(app_id, access_key, hotel_no, checkin, checkout, adults, squeeze, raw):
+    """全ページを取得して (roomBasicInfo, dailyCharge) のリストを返す。"""
+    results = []
+    page = 1
+    while True:
+        data = fetch(app_id, access_key, hotel_no, checkin, checkout, adults, squeeze, page)
+        check_api_error(data)
+        if raw:
+            print(json.dumps(data, ensure_ascii=False, indent=2))
+            print("=" * 60)
+        results.extend(iter_room_entries(data))
+        paging = data.get("pagingInfo", {})
+        if page >= paging.get("pageCount", 1):
+            break
+        page += 1
+        time.sleep(REQUEST_INTERVAL_SEC)
+    return results
+
+
+def date_range(checkin, checkout):
+    """checkin〜checkout(泊数分)の (泊日, 翌日) のペアを返す。"""
+    d0 = datetime.date.fromisoformat(checkin)
+    d1 = datetime.date.fromisoformat(checkout)
+    if d1 <= d0:
+        sys.exit("checkout は checkin より後の日付にしてください。")
+    one = datetime.timedelta(days=1)
+    d = d0
+    while d < d1:
+        yield d.isoformat(), (d + one).isoformat()
+        d += one
 
 
 def compare(value):
@@ -122,37 +157,53 @@ def main():
     if not access_key:
         sys.exit("環境変数 RAKUTEN_ACCESS_KEY が未設定です。 export RAKUTEN_ACCESS_KEY=pk_... を実行してください。")
 
-    try:
-        data = fetch(app_id, access_key, args.hotel_no, args.checkin, args.checkout, args.adults, args.squeeze)
-    except Exception as e:
-        sys.exit(f"リクエスト失敗: {e}")
+    # APIは複数泊指定でも初泊分しか返さないため、1泊ずつ取得してプラン別に合算する
+    nights = list(date_range(args.checkin, args.checkout))
+    plans = {}  # (planId, roomName) -> {info, nights: {stayDate: total}}
+    for i, (n_in, n_out) in enumerate(nights):
+        if i > 0:
+            time.sleep(REQUEST_INTERVAL_SEC)
+        try:
+            entries = fetch_all_pages(app_id, access_key, args.hotel_no,
+                                      n_in, n_out, args.adults, args.squeeze, args.raw)
+        except Exception as e:
+            sys.exit(f"リクエスト失敗 ({n_in}泊分): {e}")
+        for basic, charge in entries:
+            key = (basic.get("planId"), basic.get("roomName"))
+            p = plans.setdefault(key, {
+                "planName": basic.get("planName"),
+                "roomName": basic.get("roomName"),
+                "planId": basic.get("planId"),
+                "withBreakfastFlag": basic.get("withBreakfastFlag"),
+                "nights": {},
+            })
+            if charge.get("total") is not None:
+                p["nights"][charge.get("stayDate")] = charge["total"]
 
-    if isinstance(data, dict) and data.get("error"):
-        sys.exit(f"APIエラー: {data.get('error')} / {data.get('error_description')}")
-    if isinstance(data, dict) and data.get("errors"):
-        err = data["errors"]
-        sys.exit(f"APIエラー: {err.get('errorCode')} / {err.get('errorMessage')}")
-
-    if args.raw:
-        print(json.dumps(data, ensure_ascii=False, indent=2))
-        print("=" * 60)
-
-    plans = extract_plans(data)
     if not plans:
         print("該当プランが返りませんでした（条件に合う空室が無い/絞り込み過多の可能性）。")
         return
 
-    print(f"条件: hotelNo={args.hotel_no} {args.checkin}→{args.checkout} "
+    n_nights = len(nights)
+    print(f"条件: hotelNo={args.hotel_no} {args.checkin}→{args.checkout} ({n_nights}泊) "
           f"大人{args.adults}名 squeeze={args.squeeze}")
     print(f"参照値: 割引前 {REF_BEFORE_DISCOUNT:,}円 / 割引後 {REF_AFTER_DISCOUNT:,}円")
     print("=" * 60)
-    for i, p in enumerate(plans, 1):
+    # 全泊そろったプランを合計の昇順で表示し、そろわないものは後ろに回す
+    ordered = sorted(plans.values(),
+                     key=lambda p: (len(p["nights"]) < n_nights,
+                                    sum(p["nights"].values())))
+    for i, p in enumerate(ordered, 1):
         bf = {1: "朝食あり", 0: "朝食なし"}.get(p["withBreakfastFlag"], "?")
+        night_list = sorted(p["nights"].items())
+        total = sum(t for _, t in night_list)
         print(f"[{i}] {p['planName']}")
         print(f"    room: {p['roomName']} / planId={p['planId']} / {bf}")
-        print(f"    各泊: {p['nights']}")
-        sum_str = f"{p['sum_total']:,}円" if p["sum_total"] is not None else "不明"
-        print(f"    合計(各泊totalの和): {sum_str}  {compare(p['sum_total'])}")
+        print(f"    各泊: {night_list}")
+        if len(night_list) < n_nights:
+            print(f"    合計: （{len(night_list)}/{n_nights}泊分のみ取得。全泊の空きが無い可能性）")
+        else:
+            print(f"    合計({n_nights}泊): {total:,}円  {compare(total)}")
         print("-" * 60)
 
 
