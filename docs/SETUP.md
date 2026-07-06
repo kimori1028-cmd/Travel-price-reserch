@@ -106,7 +106,10 @@ GitHub Actions（毎時/毎晩バッチ）→ 楽天トラベルAPI
 - Gmail以外のSMTPを使う場合は Secrets に `SMTP_HOST` / `SMTP_PORT` も追加してください。
 
 既にセットアップ済みのプロジェクトに通知機能を追加する場合は、Supabase の SQL Editor で
-`supabase/add_favorite_notify.sql` を1回実行してください。
+`supabase/add_favorite_notify.sql` と `supabase/add_favorite_notify_mode.sql` を実行してください。
+
+通知は各お気に入りの「📧 通知」から、**「指定金額以下になったら通知」**と
+**「最安値を更新したら通知」**のどちらかを選べます。
 
 ## 価格推移機能の追加（既にセットアップ済みの場合）
 

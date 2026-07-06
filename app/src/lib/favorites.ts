@@ -1,5 +1,5 @@
 import { isDemo, supabase } from './supabase'
-import type { Favorite, GradeKey } from './types'
+import type { Favorite, GradeKey, NotifyMode } from './types'
 
 const LS_KEY = 'fusaki_favorites_v1'
 
@@ -60,6 +60,7 @@ export async function addFavorite(userId: string | null, fav: NewFavorite): Prom
       note: null,
       lowest_total: fav.price_at_saved,
       notify_on_drop: false,
+      notify_mode: 'threshold',
       notify_threshold: null,
       is_shared: false,
       created_at: new Date().toISOString(),
@@ -76,10 +77,16 @@ export async function addFavorite(userId: string | null, fav: NewFavorite): Prom
 export async function setNotify(
   id: string,
   on: boolean,
+  mode: NotifyMode,
   threshold: number | null,
 ): Promise<void> {
-  // 設定変更時は「通知済み価格」をリセットして、次にしきい値を下回れば必ず通知されるようにする
-  const patch = { notify_on_drop: on, notify_threshold: threshold, last_notified_total: null }
+  // 設定変更時は「通知済み価格」をリセットして、次に条件を満たせば必ず通知されるようにする
+  const patch = {
+    notify_on_drop: on,
+    notify_mode: mode,
+    notify_threshold: mode === 'threshold' ? threshold : null,
+    last_notified_total: null,
+  }
   if (isDemo || !supabase) {
     saveLocal(loadLocal().map((f) => (f.id === id ? { ...f, ...patch } : f)))
     return

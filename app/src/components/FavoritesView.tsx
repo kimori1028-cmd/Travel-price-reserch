@@ -12,7 +12,7 @@ interface Props {
   favorites: Favorite[]
   loading: boolean
   onToggleShare: (fav: Favorite) => void
-  onToggleNotify: (fav: Favorite) => void
+  onEditNotify: (fav: Favorite) => void
   onRemove: (fav: Favorite) => void
 }
 
@@ -20,11 +20,11 @@ interface CardProps {
   index: PriceIndex
   fav: Favorite
   onToggleShare: (fav: Favorite) => void
-  onToggleNotify: (fav: Favorite) => void
+  onEditNotify: (fav: Favorite) => void
   onRemove: (fav: Favorite) => void
 }
 
-function FavoriteCard({ index, fav, onToggleShare, onToggleNotify, onRemove }: CardProps) {
+function FavoriteCard({ index, fav, onToggleShare, onEditNotify, onRemove }: CardProps) {
   const g = gradeDef(fav.room_grade)
   const q = stayQuote(index, fav.adult_num, fav.room_grade, fav.checkin_date, fav.nights)
   const current = q.status === 'ok' ? q.total : null
@@ -156,17 +156,21 @@ function FavoriteCard({ index, fav, onToggleShare, onToggleNotify, onRemove }: C
             </button>
             <button
               type="button"
-              onClick={() => onToggleNotify(fav)}
-              title="指定金額以下になったらメール通知"
+              onClick={() => onEditNotify(fav)}
+              title="値下がりメール通知の設定"
               className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold ${
-                fav.notify_on_drop && fav.notify_threshold != null
+                fav.notify_on_drop
                   ? 'border-amber-500 bg-amber-50 text-amber-600'
                   : 'border-slate-300 text-slate-500'
               }`}
             >
-              {fav.notify_on_drop && fav.notify_threshold != null
-                ? `📧 ${fmtMan(fav.notify_threshold)}以下`
-                : '📧 通知'}
+              {!fav.notify_on_drop
+                ? '📧 通知'
+                : fav.notify_mode === 'new_low'
+                  ? '📧 最安更新'
+                  : fav.notify_threshold != null
+                    ? `📧 ${fmtMan(fav.notify_threshold)}以下`
+                    : '📧 通知'}
             </button>
             <button
               type="button"
@@ -211,7 +215,7 @@ export function FavoritesView({
   favorites,
   loading,
   onToggleShare,
-  onToggleNotify,
+  onEditNotify,
   onRemove,
 }: Props) {
   if (loading) {
@@ -235,7 +239,7 @@ export function FavoritesView({
       index={index}
       fav={f}
       onToggleShare={onToggleShare}
-      onToggleNotify={onToggleNotify}
+      onEditNotify={onEditNotify}
       onRemove={onRemove}
     />
   )

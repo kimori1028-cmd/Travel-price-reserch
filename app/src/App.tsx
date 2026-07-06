@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { CalendarView } from './components/CalendarView'
 import { FavoritesView } from './components/FavoritesView'
 import { LoginView } from './components/LoginView'
+import { NotifyModal } from './components/NotifyModal'
 import { SearchView } from './components/SearchView'
 import { SetPasswordView } from './components/SetPasswordView'
 import { buildIndex } from './lib/calc'
@@ -15,7 +16,14 @@ import {
   setShared,
 } from './lib/favorites'
 import { isDemo, supabase } from './lib/supabase'
-import { ADULT_OPTIONS, gradeDef, type Favorite, type GradeKey, type NightlyPrice } from './lib/types'
+import {
+  ADULT_OPTIONS,
+  gradeDef,
+  type Favorite,
+  type GradeKey,
+  type NightlyPrice,
+  type NotifyMode,
+} from './lib/types'
 
 type Tab = 'calendar' | 'search' | 'favorites'
 
@@ -34,6 +42,7 @@ export default function App() {
   const [dataError, setDataError] = useState<string | null>(null)
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const [favLoading, setFavLoading] = useState(true)
+  const [notifyFav, setNotifyFav] = useState<Favorite | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
   // 招待リンク/パスワード再設定リンクから来た場合はパスワード設定画面を出す
@@ -115,39 +124,18 @@ export default function App() {
     }
   }
 
-  const askThreshold = (fav: Favorite): number | null => {
-    const suggestion = fav.notify_threshold ?? fav.lowest_total ?? fav.price_at_saved
-    const input = window.prompt(
-      'いくら以下になったら通知しますか？（円・数字のみ）',
-      suggestion != null ? String(suggestion) : '',
-    )
-    if (input == null) return null
-    const value = parseInt(input.replace(/[^\d]/g, ''), 10)
-    if (!value || value <= 0) {
-      showToast('金額を数字で入力してください')
-      return null
-    }
-    return value
-  }
-
-  const handleToggleNotify = async (fav: Favorite) => {
+  const handleSetNotify = async (
+    fav: Favorite,
+    on: boolean,
+    mode: NotifyMode,
+    threshold: number | null,
+  ) => {
     try {
-      if (fav.notify_on_drop) {
-        if (window.confirm('値下がり通知をOFFにしますか？\n（キャンセルすると通知金額を変更できます）')) {
-          await setNotify(fav.id, false, null)
-          showToast('通知をOFFにしました')
-        } else {
-          const value = askThreshold(fav)
-          if (value == null) return
-          await setNotify(fav.id, true, value)
-          showToast(`📧 ${value.toLocaleString('ja-JP')}円以下になったら通知します`)
-        }
-      } else {
-        const value = askThreshold(fav)
-        if (value == null) return
-        await setNotify(fav.id, true, value)
-        showToast(`📧 ${value.toLocaleString('ja-JP')}円以下になったら通知します`)
-      }
+      await setNotify(fav.id, on, mode, threshold)
+      if (!on) showToast('通知をOFFにしました')
+      else if (mode === 'new_low') showToast('📧 最安値を更新したら通知します')
+      else showToast(`📧 ${(threshold ?? 0).toLocaleString('ja-JP')}円以下になったら通知します`)
+      setNotifyFav(null)
       reloadFavorites()
     } catch (e) {
       showToast(String((e as Error).message ?? e))
@@ -238,7 +226,7 @@ export default function App() {
             favorites={favorites}
             loading={favLoading}
             onToggleShare={handleToggleShare}
-            onToggleNotify={handleToggleNotify}
+            onEditNotify={setNotifyFav}
             onRemove={handleRemove}
           />
         )}
@@ -256,6 +244,14 @@ export default function App() {
           </a>
         </footer>
       </main>
+
+      {notifyFav && (
+        <NotifyModal
+          fav={notifyFav}
+          onClose={() => setNotifyFav(null)}
+          onSave={(on, mode, threshold) => handleSetNotify(notifyFav, on, mode, threshold)}
+        />
+      )}
 
       {/* トースト */}
       {toast && (

@@ -127,7 +127,7 @@ API認証は applicationId のみで会員ログインを渡せないため、**
 |---|---|---|
 | `nightly_price` | 1泊単位の最新価格（バッチが upsert） | hotel_no, room_grade, stay_date, adult_num, min_total, plan_name, reserve_url, is_available, fetched_at / 一意制約 (hotel_no,room_grade,stay_date,adult_num) |
 | `price_history` | 変化イベントのみ追記 | 同上 + recorded_at |
-| `favorites` | お気に入り＋共有＋通知設定 | owner_id, room_grade, checkin_date, nights, adult_num, is_shared, notify_on_drop, notify_threshold, last_notified_total, lowest_total, price_at_saved |
+| `favorites` | お気に入り＋共有＋通知設定 | owner_id, room_grade, checkin_date, nights, adult_num, is_shared, notify_on_drop, notify_mode('threshold'/'new_low'), notify_threshold, last_notified_total, lowest_total, price_at_saved |
 | `profiles` | 共有時の表示名（auth 連動トリガーで自動生成） | id, display_name |
 
 ### RLS（行レベル権限）方針【設計】
@@ -160,8 +160,9 @@ API認証は applicationId のみで会員ログインを渡せないため、**
 - **環境変数**: `RAKUTEN_APP_ID`, `RAKUTEN_ACCESS_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, （通知用）`SMTP_USERNAME`, `SMTP_PASSWORD`, `APP_URL`。**先頭/末尾の空白は strip する**（貼付け時の改行混入対策）。
 
 ### メール通知【設計】
-- お気に入りごとに `notify_threshold`（円）を設定。**合計参考価格が閾値以下**になったら owner のメールへ送信。
-- **同じ価格で連投しない**（`last_notified_total` より下がった時だけ再送、閾値超過でリセット）。
+- お気に入りごとに `notify_mode` で通知条件を**2モードから選択**:
+  - **`threshold`**: `notify_threshold`（円）以下になったら通知。**同じ価格で連投しない**（`last_notified_total` より下がった時だけ再送、閾値超過でリセット）。
+  - **`new_low`**: **これまでの最安値（`lowest_total`）を更新（下回る）たびに通知**。金額設定は不要。判定は最安更新前の値と比較する（初回観測時は通知しない）。
 - 送信は SMTP（既定 Gmail SSL 465）。`SMTP_*` 未設定なら通知だけスキップし本体は正常動作。
 
 ---
@@ -176,7 +177,7 @@ API認証は applicationId のみで会員ログインを渡せないため、**
   - **祝日は日番号を赤**（`holidays.ts` が計算：固定祝日＋ハッピーマンデー＋春分秋分＋振替休日＋国民の休日）。
   - セルタップで**詳細ボトムシート**（✕閉じるボタン＋各泊内訳＋**推移グラフ**（最安/最高とその日付）＋予約リンク＋★保存）。
 - **最安検索**（`SearchView`）: 泊数/出発曜日/グレード（複数選択）＋**月単位の期間プルダウン（日本語 `YYYY年M月`）**。DB上で計算しAPIは叩かない。安い順表示。各結果に予約リンク・楽パックボタン・★保存。
-- **お気に入り**（`FavoritesView`）: 保存/共有トグル/通知閾値設定/削除。保存時価格との差分・これまで最安・**価格推移グラフ**（カードごとに履歴ロード）を表示。
+- **お気に入り**（`FavoritesView` / `NotifyModal`）: 保存/共有トグル/**通知設定モーダル**/削除。保存時価格との差分・これまで最安・**価格推移グラフ**（カードごとに履歴ロード）を表示。通知はモーダルで**「指定金額以下」か「最安値更新」か**を選択（金額はモード時のみ入力）。
 - **推移グラフ**（`TrendChart` / `trend.ts`）: 履歴の変化イベントからN泊合計のステップ折れ線を復元。最安（緑）・最高（赤）の点と**その日付**を表示。
 - **認証**（`LoginView` / `SetPasswordView`）: 招待・再設定リンクからの**自前パスワード設定画面**、パスワード表示切替、「パスワードを忘れた」再送。
 - **予約リンク**（`rakuten.ts`）: 「サイトで確認」（宿泊のみ・日付入り）＋「ANA楽パック」（**帰り便別に2ボタン**＝往路固定・復路 `nsBinHukuro` 違い、**レンタカー付き `fRcUmu=1`**）。カレンダー詳細/検索結果/お気に入りの全カードに設置。すべて**楽天公式ドメインへ直リンク**（アフィリエイト/トラッキングID無し）。

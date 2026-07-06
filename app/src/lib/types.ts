@@ -66,6 +66,7 @@ export interface Favorite {
   price_at_saved: number | null
   lowest_total: number | null
   notify_on_drop: boolean
+  notify_mode: NotifyMode
   notify_threshold: number | null
   is_shared: boolean
   created_at: string
@@ -73,6 +74,8 @@ export interface Favorite {
   owner_name?: string
   is_mine?: boolean
 }
+
+export type NotifyMode = 'threshold' | 'new_low'
 
 export const NIGHT_OPTIONS = [3, 4] as const
 export const ADULT_OPTIONS = [1, 2, 3, 4] as const

@@ -237,7 +237,8 @@ def load_favorites(supabase_url, service_key, today_iso):
            + "/rest/v1/favorites"
              f"?checkin_date=gte.{today_iso}"
              "&select=id,owner_id,room_grade,checkin_date,nights,adult_num,"
-             "notify_on_drop,notify_threshold,last_notified_total,lowest_total,price_at_saved")
+             "notify_on_drop,notify_mode,notify_threshold,last_notified_total,"
+             "lowest_total,price_at_saved")
     return supabase_request(url, service_key) or []
 
 
@@ -270,14 +271,35 @@ def send_mail(to_addr, subject, body):
     return True
 
 
-def process_favorites(supabase_url, service_key, favorites, latest, grade_labels):
-    """お気に入りの最安値を更新し、設定金額以下になったらメール通知する。
+def send_favorite_mail(supabase_url, service_key, fav, label, total, reason_line, app_url):
+    """お気に入りの通知メールを送る。送信できたら True。"""
+    to_addr = get_user_email(supabase_url, service_key, fav["owner_id"])
+    if not to_addr:
+        return False
+    subject = (f"【フサキ価格モニター】{total:,}円 "
+               f"{fav['checkin_date']}発{fav['nights']}泊 {label}")
+    body = (
+        f"お気に入りの参考価格が通知条件に達しました。\n\n"
+        f"　部屋グレード: {label}\n"
+        f"　日程: {fav['checkin_date']} 発 {fav['nights']}泊{fav['nights'] + 1}日"
+        f" / 大人{fav['adult_num']}名\n"
+        f"　{reason_line}\n"
+        f"　現在の価格: {total:,}円\n\n"
+        + (f"アプリで確認: {app_url}\n\n" if app_url else "")
+        + "※1泊料金の合算による参考価格です。実際の予約価格は楽天トラベルでご確認ください。\n")
+    send_mail(to_addr, subject, body)
+    print(f"  通知メール送信: {to_addr} ({fav['checkin_date']} {label} {total:,}円)")
+    return True
 
-    通知ルール:
-      - notify_on_drop が ON かつ notify_threshold(円)が設定されているお気に入りが対象
-      - 合計参考価格が threshold 以下になったら通知
-      - 同じ価格で繰り返し通知しない(前回通知した価格より更に下がった時だけ再通知)
-      - 一度 threshold を上回ったらリセットし、再び下回れば改めて通知する
+
+def process_favorites(supabase_url, service_key, favorites, latest, grade_labels):
+    """お気に入りの最安値を更新し、通知条件に達したらメール通知する。
+
+    通知モード(notify_mode):
+      - 'threshold' : notify_threshold(円)以下になったら通知。
+                      同じ価格で連投せず、前回通知額より更に下がった時だけ再通知。
+                      一度しきい値を上回ったらリセットし再び下回れば改めて通知。
+      - 'new_low'   : これまでの最安値を更新(下回った)ら通知。
     """
     smtp_ready = bool(os.environ.get("SMTP_USERNAME") and os.environ.get("SMTP_PASSWORD"))
     app_url = os.environ.get("APP_URL", "")
@@ -297,52 +319,53 @@ def process_favorites(supabase_url, service_key, favorites, latest, grade_labels
             continue
 
         patch = {}
+        label = grade_labels.get(fav["room_grade"], fav["room_grade"])
 
-        # 「これまで最安」の記録を更新
-        lowest = fav.get("lowest_total")
-        if lowest is None:
+        # 「これまで最安」の記録を更新（通知判定は更新前の値と比較する）
+        prev_lowest = fav.get("lowest_total")
+        if prev_lowest is None:
             saved = fav.get("price_at_saved")
-            patch["lowest_total"] = min(total, saved) if saved else total
-        elif total < lowest:
+            prev_lowest = min(total, saved) if saved else total
+            patch["lowest_total"] = prev_lowest  # 初回は基準値の記録のみ
+        elif total < prev_lowest:
             patch["lowest_total"] = total
 
-        # しきい値通知
-        threshold = fav.get("notify_threshold")
-        last_notified = fav.get("last_notified_total")
-        if fav.get("notify_on_drop") and threshold is not None:
-            if total <= threshold and (last_notified is None or total < last_notified):
-                label = grade_labels.get(fav["room_grade"], fav["room_grade"])
-                if not smtp_ready:
-                    print("  しきい値到達(メール未設定のため通知スキップ): "
-                          f"{fav['checkin_date']}発 {label} {total:,}円")
-                else:
-                    to_addr = get_user_email(supabase_url, service_key, fav["owner_id"])
-                    if to_addr:
-                        subject = (f"【フサキ価格モニター】{total:,}円に値下がり "
-                                   f"{fav['checkin_date']}発{fav['nights']}泊 {label}")
-                        body = (
-                            f"お気に入りの参考価格が、設定した金額以下になりました。\n\n"
-                            f"　部屋グレード: {label}\n"
-                            f"　日程: {fav['checkin_date']} 発 "
-                            f"{fav['nights']}泊{fav['nights'] + 1}日"
-                            f" / 大人{fav['adult_num']}名\n"
-                            f"　通知設定: {threshold:,}円以下\n"
-                            f"　現在の価格: {total:,}円\n"
-                            + (f"　これまでの最安: {lowest:,}円\n" if lowest else "")
-                            + "\n"
-                            + (f"アプリで確認: {app_url}\n\n" if app_url else "")
-                            + "※1泊料金の合算による参考価格です。"
-                              "実際の予約価格は楽天トラベルでご確認ください。\n")
+        if fav.get("notify_on_drop"):
+            mode = fav.get("notify_mode") or "threshold"
+
+            if mode == "new_low":
+                # これまでの最安値を更新したら通知
+                if prev_lowest is not None and total < prev_lowest:
+                    reason = f"これまでの最安({prev_lowest:,}円)を更新（{total - prev_lowest:+,}円）"
+                    if not smtp_ready:
+                        print(f"  最安更新(メール未設定): {fav['checkin_date']} {label} {total:,}円")
+                    else:
                         try:
-                            send_mail(to_addr, subject, body)
-                            notified += 1
-                            patch["last_notified_total"] = total
-                            print(f"  通知メール送信: {to_addr} "
-                                  f"({fav['checkin_date']} {label} {total:,}円)")
+                            if send_favorite_mail(supabase_url, service_key, fav, label,
+                                                  total, reason, app_url):
+                                notified += 1
                         except Exception as e:
                             print(f"  メール送信失敗: {e}", file=sys.stderr)
-            elif total > threshold and last_notified is not None:
-                patch["last_notified_total"] = None  # 上回ったのでリセット
+
+            else:  # threshold
+                threshold = fav.get("notify_threshold")
+                last_notified = fav.get("last_notified_total")
+                if threshold is not None:
+                    if total <= threshold and (last_notified is None or total < last_notified):
+                        reason = f"通知設定: {threshold:,}円以下"
+                        if not smtp_ready:
+                            print(f"  しきい値到達(メール未設定): {fav['checkin_date']} "
+                                  f"{label} {total:,}円")
+                        else:
+                            try:
+                                if send_favorite_mail(supabase_url, service_key, fav, label,
+                                                      total, reason, app_url):
+                                    notified += 1
+                                    patch["last_notified_total"] = total
+                            except Exception as e:
+                                print(f"  メール送信失敗: {e}", file=sys.stderr)
+                    elif total > threshold and last_notified is not None:
+                        patch["last_notified_total"] = None  # 上回ったのでリセット
 
         if patch:
             supabase_request(
