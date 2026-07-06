@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { stayQuote, type PriceIndex } from '../lib/calc'
 import { addDays, fmtDateJa, fmtDateShort, fmtYen } from '../lib/dates'
 import { loadHistory, type HistoryEvent } from '../lib/history'
+import { rakutenPlanUrl } from '../lib/rakuten'
 import { buildTrend, trendStats } from '../lib/trend'
 import { GRADES, type GradeKey } from '../lib/types'
 import { TrendChart } from './TrendChart'
@@ -128,16 +129,14 @@ export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavori
                       </div>
                     )}
                     <div className="mt-2 flex gap-2">
-                      {firstRow?.reserve_url && (
-                        <a
-                          href={firstRow.reserve_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex-1 rounded-lg bg-rose-500 py-2 text-center text-sm font-bold text-white"
-                        >
-                          楽天トラベルで確認
-                        </a>
-                      )}
+                      <a
+                        href={rakutenPlanUrl(checkin, nights, adults)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 rounded-lg bg-rose-500 py-2 text-center text-sm font-bold text-white"
+                      >
+                        楽天トラベルで確認
+                      </a>
                       <button
                         type="button"
                         onClick={() => onAddFavorite(g.key, checkin, nights, q.total)}

@@ -1,5 +1,6 @@
 import { stayQuote, type PriceIndex } from '../lib/calc'
 import { fmtDateJa, fmtMan, fmtYen } from '../lib/dates'
+import { rakutenPlanUrl } from '../lib/rakuten'
 import { gradeDef, type Favorite } from '../lib/types'
 
 interface Props {
@@ -41,7 +42,6 @@ export function FavoritesView({
     const current = q.status === 'ok' ? q.total : null
     const diff =
       current != null && f.price_at_saved != null ? current - f.price_at_saved : null
-    const firstRow = q.nights[0]?.row
     return (
       <div key={f.id} className="rounded-xl border border-slate-200 bg-white p-3">
         <div className="flex items-start justify-between gap-2">
@@ -87,16 +87,14 @@ export function FavoritesView({
           </div>
         </div>
         <div className="mt-2 flex items-center gap-2">
-          {firstRow?.reserve_url && (
-            <a
-              href={firstRow.reserve_url}
-              target="_blank"
-              rel="noreferrer"
-              className="flex-1 rounded-lg bg-rose-500 py-1.5 text-center text-xs font-bold text-white"
-            >
-              楽天トラベルで確認
-            </a>
-          )}
+          <a
+            href={rakutenPlanUrl(f.checkin_date, f.nights, f.adult_num)}
+            target="_blank"
+            rel="noreferrer"
+            className="flex-1 rounded-lg bg-rose-500 py-1.5 text-center text-xs font-bold text-white"
+          >
+            楽天トラベルで確認
+          </a>
           {f.is_mine && (
             <>
               <button

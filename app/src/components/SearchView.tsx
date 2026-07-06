@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { searchCheapest, type PriceIndex } from '../lib/calc'
 import { addDays, fmtDateJa, fmtYen, todayISO, WEEKDAY_LABELS } from '../lib/dates'
+import { rakutenPlanUrl } from '../lib/rakuten'
 import { GRADES, NIGHT_OPTIONS, gradeDef, type GradeKey } from '../lib/types'
 import { Chip } from './Chip'
 
@@ -123,7 +124,6 @@ export function SearchView({ index, adults, onAddFavorite }: Props) {
           <div className="space-y-2">
             {results.slice(0, MAX_RESULTS).map((r) => {
               const g = gradeDef(r.grade)
-              const firstRow = r.quote.nights[0]?.row
               return (
                 <div
                   key={`${r.checkin}-${r.grade}-${r.nights}`}
@@ -144,16 +144,14 @@ export function SearchView({ index, adults, onAddFavorite }: Props) {
                     </div>
                   </div>
                   <div className="mt-2 flex gap-2">
-                    {firstRow?.reserve_url && (
-                      <a
-                        href={firstRow.reserve_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex-1 rounded-lg bg-rose-500 py-1.5 text-center text-xs font-bold text-white"
-                      >
-                        楽天トラベルで確認
-                      </a>
-                    )}
+                    <a
+                      href={rakutenPlanUrl(r.checkin, r.nights, adults)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1 rounded-lg bg-rose-500 py-1.5 text-center text-xs font-bold text-white"
+                    >
+                      楽天トラベルで確認
+                    </a>
                     <button
                       type="button"
                       onClick={() => onAddFavorite(r.grade, r.checkin, r.nights, r.total)}
