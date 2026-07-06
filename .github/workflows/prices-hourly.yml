@@ -1,7 +1,7 @@
 name: prices-hourly
 
-# 毎時: 直近60日分の価格を更新（人数1〜4名）
-# 所要 約10〜15分（楽天レートリミット遵守のため1リクエスト1.6秒間隔）
+# 毎時: お気に入りに登録された日程だけ価格を更新（数分で完了）
+# 値下がりを検知したら（設定していれば）メール通知する
 
 on:
   schedule:
@@ -15,16 +15,19 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Fetch prices (next 60 days)
+      - name: Fetch favorite stays only
         env:
           RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
           RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python batch/fetch_prices.py --days 60 --adults 1,2,3,4
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          APP_URL: ${{ secrets.APP_URL }}
+        run: python batch/fetch_prices.py --favorites-only

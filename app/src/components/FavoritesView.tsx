@@ -7,10 +7,18 @@ interface Props {
   favorites: Favorite[]
   loading: boolean
   onToggleShare: (fav: Favorite) => void
+  onToggleNotify: (fav: Favorite) => void
   onRemove: (fav: Favorite) => void
 }
 
-export function FavoritesView({ index, favorites, loading, onToggleShare, onRemove }: Props) {
+export function FavoritesView({
+  index,
+  favorites,
+  loading,
+  onToggleShare,
+  onToggleNotify,
+  onRemove,
+}: Props) {
   if (loading) {
     return <div className="py-10 text-center text-sm text-slate-400">読み込み中…</div>
   }
@@ -71,6 +79,11 @@ export function FavoritesView({ index, favorites, loading, onToggleShare, onRemo
             {f.price_at_saved != null && (
               <div className="text-[11px] text-slate-400">保存時 {fmtYen(f.price_at_saved)}</div>
             )}
+            {f.lowest_total != null && (
+              <div className="text-[11px] text-emerald-600">
+                これまで最安 {fmtYen(f.lowest_total)}
+              </div>
+            )}
           </div>
         </div>
         <div className="mt-2 flex items-center gap-2">
@@ -95,7 +108,19 @@ export function FavoritesView({ index, favorites, loading, onToggleShare, onRemo
                     : 'border-slate-300 text-slate-500'
                 }`}
               >
-                {f.is_shared ? '共有中' : '共有する'}
+                {f.is_shared ? '共有中' : '共有'}
+              </button>
+              <button
+                type="button"
+                onClick={() => onToggleNotify(f)}
+                title="値下がり時にメール通知"
+                className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold ${
+                  f.notify_on_drop
+                    ? 'border-amber-500 bg-amber-50 text-amber-600'
+                    : 'border-slate-300 text-slate-500'
+                }`}
+              >
+                {f.notify_on_drop ? '📧 通知ON' : '📧 通知'}
               </button>
               <button
                 type="button"
@@ -126,6 +151,12 @@ export function FavoritesView({ index, favorites, loading, onToggleShare, onRemo
           <div className="space-y-2">{shared.map(card)}</div>
         </div>
       )}
+      <p className="text-[11px] leading-relaxed text-slate-400">
+        ・チェックイン日を過ぎたお気に入りは自動的に削除されます。
+        <br />
+        ・「📧 通知」をONにすると、参考価格がこれまでの最安値を下回った時にメールが届きます
+        （メール送信の設定がされている場合）。お気に入りの日程は1時間ごとに価格チェックされます。
+      </p>
     </div>
   )
 }

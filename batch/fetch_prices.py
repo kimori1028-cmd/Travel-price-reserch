@@ -25,11 +25,14 @@ import datetime
 import json
 import os
 import re
+import smtplib
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from email.header import Header
+from email.mime.text import MIMEText
 from zoneinfo import ZoneInfo
 
 ENDPOINT = "https://openapi.rakuten.co.jp/engine/api/Travel/VacantHotelSearch/20170426"
@@ -216,11 +219,114 @@ def fetch_existing(supabase_url, service_key, hotel_no, date_from, date_to):
 
 
 def prune_past(supabase_url, service_key, today_iso):
-    """過去日（今日より前）の価格・履歴を削除して容量を抑える。"""
-    for table in ("nightly_price", "price_history"):
+    """過去日（今日より前）の価格・履歴・お気に入りを削除する。"""
+    for table, col in (("nightly_price", "stay_date"),
+                       ("price_history", "stay_date"),
+                       ("favorites", "checkin_date")):
         url = (supabase_url.rstrip("/")
-               + f"/rest/v1/{table}?stay_date=lt.{today_iso}")
+               + f"/rest/v1/{table}?{col}=lt.{today_iso}")
         supabase_request(url, service_key, method="DELETE")
+
+
+def load_favorites(supabase_url, service_key, today_iso):
+    """今日以降のお気に入りを全ユーザー分取得する。"""
+    url = (supabase_url.rstrip("/")
+           + "/rest/v1/favorites"
+             f"?checkin_date=gte.{today_iso}"
+             "&select=id,owner_id,room_grade,checkin_date,nights,adult_num,"
+             "notify_on_drop,lowest_total,price_at_saved")
+    return supabase_request(url, service_key) or []
+
+
+def get_user_email(supabase_url, service_key, user_id):
+    """Supabase Auth Admin API でユーザーのメールアドレスを取得する。"""
+    try:
+        data = supabase_request(
+            supabase_url.rstrip("/") + f"/auth/v1/admin/users/{user_id}", service_key)
+        return (data or {}).get("email")
+    except Exception as e:
+        print(f"  メールアドレス取得失敗 ({user_id}): {e}", file=sys.stderr)
+        return None
+
+
+def send_mail(to_addr, subject, body):
+    """SMTP(既定: Gmail)でメールを送る。SMTP_USERNAME/SMTP_PASSWORD が必要。"""
+    user = os.environ.get("SMTP_USERNAME")
+    password = os.environ.get("SMTP_PASSWORD")
+    if not user or not password:
+        return False
+    host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    port = int(os.environ.get("SMTP_PORT", "465"))
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["Subject"] = Header(subject, "utf-8")
+    msg["From"] = user
+    msg["To"] = to_addr
+    with smtplib.SMTP_SSL(host, port, timeout=30) as server:
+        server.login(user, password)
+        server.sendmail(user, [to_addr], msg.as_string())
+    return True
+
+
+def process_favorites(supabase_url, service_key, favorites, latest, grade_labels):
+    """お気に入りの最安値を更新し、値下がり時は(設定があれば)メール通知する。"""
+    smtp_ready = bool(os.environ.get("SMTP_USERNAME") and os.environ.get("SMTP_PASSWORD"))
+    app_url = os.environ.get("APP_URL", "")
+    notified = 0
+    for fav in favorites:
+        checkin = datetime.date.fromisoformat(fav["checkin_date"])
+        total = 0
+        available = True
+        for i in range(fav["nights"]):
+            d = (checkin + datetime.timedelta(days=i)).isoformat()
+            row = latest.get((fav["room_grade"], d, fav["adult_num"]))
+            if row is None or not row["is_available"] or row["min_total"] is None:
+                available = False
+                break
+            total += row["min_total"]
+        if not available:
+            continue
+
+        lowest = fav.get("lowest_total")
+        if lowest is None:
+            saved = fav.get("price_at_saved")
+            new_low = min(total, saved) if saved else total
+        elif total < lowest:
+            new_low = total
+        else:
+            continue
+
+        supabase_request(
+            supabase_url.rstrip("/") + f"/rest/v1/favorites?id=eq.{fav['id']}",
+            service_key, method="PATCH", data={"lowest_total": new_low})
+
+        # 通知は「記録済みの最安値をさらに下回った」時だけ
+        if lowest is not None and total < lowest and fav.get("notify_on_drop"):
+            if not smtp_ready:
+                print("  値下がり検知(メール未設定のため通知スキップ): "
+                      f"{fav['checkin_date']}発 {fav['nights']}泊 {fav['room_grade']}")
+                continue
+            to_addr = get_user_email(supabase_url, service_key, fav["owner_id"])
+            if not to_addr:
+                continue
+            label = grade_labels.get(fav["room_grade"], fav["room_grade"])
+            subject = (f"【フサキ価格モニター】値下がり {fav['checkin_date']}発"
+                       f"{fav['nights']}泊 {label}")
+            body = (
+                f"お気に入りの参考価格が、これまでの最安値を下回りました。\n\n"
+                f"　部屋グレード: {label}\n"
+                f"　日程: {fav['checkin_date']} 発 {fav['nights']}泊{fav['nights'] + 1}日"
+                f" / 大人{fav['adult_num']}名\n"
+                f"　これまでの最安: {lowest:,}円\n"
+                f"　新しい価格: {total:,}円 ({total - lowest:+,}円)\n\n"
+                + (f"アプリで確認: {app_url}\n\n" if app_url else "")
+                + "※1泊料金の合算による参考価格です。実際の予約価格は楽天トラベルでご確認ください。\n")
+            try:
+                send_mail(to_addr, subject, body)
+                notified += 1
+                print(f"  値下がり通知メール送信: {to_addr} ({fav['checkin_date']} {label})")
+            except Exception as e:
+                print(f"  メール送信失敗: {e}", file=sys.stderr)
+    return notified
 
 
 def main():
@@ -228,6 +334,8 @@ def main():
     ap.add_argument("--days", type=int, default=60, help="今日から何日分取得するか")
     ap.add_argument("--start-offset", type=int, default=0, help="開始日のオフセット(日)")
     ap.add_argument("--adults", default="1,2,3,4", help="取得する人数(カンマ区切り)")
+    ap.add_argument("--favorites-only", action="store_true",
+                    help="お気に入りに登録された日程・人数だけ取得する(毎時バッチ用)")
     ap.add_argument("--dry-run", metavar="PATH", help="Supabaseに書かずJSONファイルへ出力")
     args = ap.parse_args()
 
@@ -241,115 +349,141 @@ def main():
     if not args.dry_run and (not supabase_url or not service_key):
         sys.exit("環境変数 SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY を設定してください"
                  "(検証だけなら --dry-run out.json を使用)。")
+    if args.favorites_only and args.dry_run:
+        sys.exit("--favorites-only はお気に入りをDBから読むため --dry-run と併用できません。")
 
     with open(CONFIG_PATH, encoding="utf-8") as f:
         config = json.load(f)
     hotel_no = config["hotel_no"]
     grades = config["grades"]
+    grade_labels = {g["key"]: g["label"] for g in grades}
     adults_list = [int(a) for a in args.adults.split(",") if a.strip()]
 
     today = datetime.datetime.now(ZoneInfo("Asia/Tokyo")).date()
     one = datetime.timedelta(days=1)
-    dates = [today + datetime.timedelta(days=args.start_offset + i) for i in range(args.days)]
 
-    total_requests = 0
+    favorites = []
+    if not args.dry_run:
+        # 過去日の掃除(価格・履歴・お気に入り) + お気に入りの読み込み
+        prune_past(supabase_url, service_key, today.isoformat())
+        favorites = load_favorites(supabase_url, service_key, today.isoformat())
+
+    # 取得対象の (宿泊日, 人数) ペアを決める
+    if args.favorites_only:
+        pair_set = set()
+        for fav in favorites:
+            checkin = datetime.date.fromisoformat(fav["checkin_date"])
+            for i in range(fav["nights"]):
+                pair_set.add((checkin + datetime.timedelta(days=i), fav["adult_num"]))
+        pairs = sorted(pair_set)
+        if not pairs:
+            print("お気に入りが無いため取得対象なし。終了します。")
+            return
+        print(f"取得開始(お気に入りのみ): hotelNo={hotel_no} 対象 {len(pairs)}件 "
+              f"(お気に入り{len(favorites)}件)")
+    else:
+        dates = [today + datetime.timedelta(days=args.start_offset + i)
+                 for i in range(args.days)]
+        pairs = [(d, adults) for d in dates for adults in adults_list]
+        print(f"取得開始: hotelNo={hotel_no} {dates[0]}〜{dates[-1]} ({len(dates)}日) "
+              f"人数={adults_list} dry_run={bool(args.dry_run)}")
+
     all_rows = []
     pending = []
     history_rows = []
     history_count = 0
+    latest = {}  # (grade, stay_date, adults) -> {min_total, is_available}
     unmatched = {}
     furthest_available = None
     started = time.monotonic()
 
-    print(f"取得開始: hotelNo={hotel_no} {dates[0]}〜{dates[-1]} ({len(dates)}日) "
-          f"人数={adults_list} dry_run={bool(args.dry_run)}")
-
     existing = {}
     if not args.dry_run:
-        # 過去日の掃除 + 変化検出用に既存データを取得
-        prune_past(supabase_url, service_key, today.isoformat())
+        # 変化検出用に既存データを取得
         existing = fetch_existing(supabase_url, service_key, hotel_no,
-                                  dates[0].isoformat(), dates[-1].isoformat())
+                                  pairs[0][0].isoformat(), pairs[-1][0].isoformat())
         print(f"既存データ: {len(existing)}件（変化した価格のみ履歴に記録）")
 
-    for d in dates:
+    for i, (d, adults) in enumerate(pairs):
         checkin = d.isoformat()
         checkout = (d + one).isoformat()
-        for adults in adults_list:
-            fetched_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
-            try:
-                entries = fetch_one_night(app_id, access_key, hotel_no, checkin, checkout, adults)
-            except Exception as e:
-                print(f"  {checkin} adults={adults}: 取得失敗 {e}", file=sys.stderr)
+        fetched_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        try:
+            entries = fetch_one_night(app_id, access_key, hotel_no, checkin, checkout, adults)
+        except Exception as e:
+            print(f"  {checkin} adults={adults}: 取得失敗 {e}", file=sys.stderr)
+            continue
+
+        best = {}  # grade_key -> (total, basic, charge)
+        for basic, charge in entries:
+            total = charge.get("total")
+            if total is None:
                 continue
-            total_requests += 1  # 概算(ページングで実際は増える)
+            key = classify(basic, grades)
+            if key is None:
+                rc = basic.get("roomClass") or "?"
+                unmatched.setdefault(rc, basic.get("roomName"))
+                continue
+            if key not in best or total < best[key][0]:
+                best[key] = (total, basic, charge)
 
-            best = {}  # grade_key -> (total, basic, charge)
-            for basic, charge in entries:
-                total = charge.get("total")
-                if total is None:
-                    continue
-                key = classify(basic, grades)
-                if key is None:
-                    rc = basic.get("roomClass") or "?"
-                    unmatched.setdefault(rc, basic.get("roomName"))
-                    continue
-                if key not in best or total < best[key][0]:
-                    best[key] = (total, basic, charge)
+        for g in grades:
+            key = g["key"]
+            if key in best:
+                total, basic, charge = best[key]
+                row = {
+                    "hotel_no": hotel_no,
+                    "room_grade": key,
+                    "stay_date": checkin,
+                    "adult_num": adults,
+                    "min_total": total,
+                    "plan_id": str(basic.get("planId") or ""),
+                    "plan_name": basic.get("planName"),
+                    "room_name": basic.get("roomName"),
+                    "with_breakfast": bool(basic.get("withBreakfastFlag")),
+                    "reserve_url": basic.get("reserveUrl"),
+                    "is_available": True,
+                    "fetched_at": fetched_at,
+                }
+                furthest_available = checkin
+            else:
+                row = {
+                    "hotel_no": hotel_no,
+                    "room_grade": key,
+                    "stay_date": checkin,
+                    "adult_num": adults,
+                    "min_total": None,
+                    "plan_id": None,
+                    "plan_name": None,
+                    "room_name": None,
+                    "with_breakfast": None,
+                    "reserve_url": None,
+                    "is_available": False,
+                    "fetched_at": fetched_at,
+                }
+            pending.append(row)
+            all_rows.append(row)
+            latest[(key, checkin, adults)] = {
+                "min_total": row["min_total"],
+                "is_available": row["is_available"],
+            }
 
-            for g in grades:
-                key = g["key"]
-                if key in best:
-                    total, basic, charge = best[key]
-                    row = {
-                        "hotel_no": hotel_no,
-                        "room_grade": key,
-                        "stay_date": checkin,
-                        "adult_num": adults,
-                        "min_total": total,
-                        "plan_id": str(basic.get("planId") or ""),
-                        "plan_name": basic.get("planName"),
-                        "room_name": basic.get("roomName"),
-                        "with_breakfast": bool(basic.get("withBreakfastFlag")),
-                        "reserve_url": basic.get("reserveUrl"),
-                        "is_available": True,
-                        "fetched_at": fetched_at,
-                    }
-                    furthest_available = checkin
-                else:
-                    row = {
-                        "hotel_no": hotel_no,
-                        "room_grade": key,
-                        "stay_date": checkin,
-                        "adult_num": adults,
-                        "min_total": None,
-                        "plan_id": None,
-                        "plan_name": None,
-                        "room_name": None,
-                        "with_breakfast": None,
-                        "reserve_url": None,
-                        "is_available": False,
-                        "fetched_at": fetched_at,
-                    }
-                pending.append(row)
-                all_rows.append(row)
+            # 価格か空室状況が前回から変化した時だけ履歴に記録
+            old = existing.get((key, checkin, adults))
+            if old is None or old.get("min_total") != row["min_total"] \
+                    or bool(old.get("is_available")) != row["is_available"]:
+                history_count += 1
+                history_rows.append({
+                    "hotel_no": hotel_no,
+                    "room_grade": key,
+                    "stay_date": checkin,
+                    "adult_num": adults,
+                    "min_total": row["min_total"],
+                    "is_available": row["is_available"],
+                    "recorded_at": fetched_at,
+                })
 
-                # 価格か空室状況が前回から変化した時だけ履歴に記録
-                old = existing.get((key, checkin, adults))
-                if old is None or old.get("min_total") != row["min_total"] \
-                        or bool(old.get("is_available")) != row["is_available"]:
-                    history_count += 1
-                    history_rows.append({
-                        "hotel_no": hotel_no,
-                        "room_grade": key,
-                        "stay_date": checkin,
-                        "adult_num": adults,
-                        "min_total": row["min_total"],
-                        "is_available": row["is_available"],
-                        "recorded_at": fetched_at,
-                    })
-
-        # 進捗保存: 日単位でまとまったらupsert
+        # 進捗保存: まとまったらupsert
         if not args.dry_run and len(pending) >= UPSERT_CHUNK:
             upsert_rows(supabase_url, service_key, "nightly_price", pending,
                         on_conflict="hotel_no,room_grade,stay_date,adult_num")
@@ -358,9 +492,9 @@ def main():
             upsert_rows(supabase_url, service_key, "price_history", history_rows)
             history_rows = []
 
-        if (d - dates[0]).days % 10 == 9:
+        if i % 40 == 39:
             elapsed = time.monotonic() - started
-            print(f"  進捗: {checkin} まで完了 ({elapsed:.0f}s)")
+            print(f"  進捗: {i + 1}/{len(pairs)} ({checkin} まで, {elapsed:.0f}s)")
 
     if not args.dry_run and pending:
         upsert_rows(supabase_url, service_key, "nightly_price", pending,
@@ -374,6 +508,11 @@ def main():
         print(f"dry-run: {len(all_rows)}行を {args.dry_run} に出力")
     else:
         print(f"upsert完了: {len(all_rows)}行 / 履歴に記録した変化: {history_count}件")
+        # お気に入りの最安値更新 + 値下がり通知
+        notified = process_favorites(supabase_url, service_key, favorites,
+                                     latest, grade_labels)
+        if notified:
+            print(f"値下がり通知メール: {notified}件送信")
 
     print(f"所要: {time.monotonic() - started:.0f}秒 / 空室データが取れた最遠日: {furthest_available}")
     if unmatched:

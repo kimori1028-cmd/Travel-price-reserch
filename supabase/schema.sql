@@ -80,6 +80,8 @@ create table if not exists public.favorites (
   adult_num int not null default 2 check (adult_num between 1 and 10),
   note text,
   price_at_saved int,
+  lowest_total int,
+  notify_on_drop boolean not null default false,
   is_shared boolean not null default false,
   created_at timestamptz not null default now()
 );

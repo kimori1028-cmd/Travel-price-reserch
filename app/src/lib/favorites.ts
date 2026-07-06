@@ -58,14 +58,27 @@ export async function addFavorite(userId: string | null, fav: NewFavorite): Prom
       id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       owner_id: 'local',
       note: null,
+      lowest_total: fav.price_at_saved,
+      notify_on_drop: false,
       is_shared: false,
       created_at: new Date().toISOString(),
     })
     saveLocal(favs)
     return
   }
-  const { error } = await supabase.from('favorites').insert({ ...fav, owner_id: userId })
+  const { error } = await supabase
+    .from('favorites')
+    .insert({ ...fav, owner_id: userId, lowest_total: fav.price_at_saved })
   if (error) throw new Error(`お気に入りの追加に失敗: ${error.message}`)
+}
+
+export async function setNotify(id: string, on: boolean): Promise<void> {
+  if (isDemo || !supabase) {
+    saveLocal(loadLocal().map((f) => (f.id === id ? { ...f, notify_on_drop: on } : f)))
+    return
+  }
+  const { error } = await supabase.from('favorites').update({ notify_on_drop: on }).eq('id', id)
+  if (error) throw new Error(`通知設定の変更に失敗: ${error.message}`)
 }
 
 export async function setShared(id: string, shared: boolean): Promise<void> {

@@ -10,6 +10,7 @@ import {
   addFavorite,
   listFavorites,
   removeFavorite,
+  setNotify,
   setShared,
 } from './lib/favorites'
 import { isDemo, supabase } from './lib/supabase'
@@ -105,6 +106,16 @@ export default function App() {
     }
   }
 
+  const handleToggleNotify = async (fav: Favorite) => {
+    try {
+      await setNotify(fav.id, !fav.notify_on_drop)
+      if (!fav.notify_on_drop) showToast('📧 値下がり時にメールで通知します')
+      reloadFavorites()
+    } catch (e) {
+      showToast(String((e as Error).message ?? e))
+    }
+  }
+
   const handleRemove = async (fav: Favorite) => {
     if (!window.confirm('このお気に入りを削除しますか？')) return
     try {
@@ -181,6 +192,7 @@ export default function App() {
             favorites={favorites}
             loading={favLoading}
             onToggleShare={handleToggleShare}
+            onToggleNotify={handleToggleNotify}
             onRemove={handleRemove}
           />
         )}
