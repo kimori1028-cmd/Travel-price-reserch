@@ -8,7 +8,8 @@
 （ヴィラスタンダード / スーペリアツイン / パティオスーペリアツイン）の価格を
 毎時自動取得し、スマホで見られるカレンダー・最安値検索・お気に入り共有を提供します。
 
-- 仕様書: [docs/spec.md](docs/spec.md)
+- 仕様書（元の要件）: [docs/spec.md](docs/spec.md)
+- **汎用仕様書（他アプリへの応用テンプレート）: [docs/REUSABLE_SPEC.md](docs/REUSABLE_SPEC.md)**
 - **セットアップ手順: [docs/SETUP.md](docs/SETUP.md)** ← 最初にここを読む
 - 構成: GitHub Actions（バッチ）→ Supabase（DB/認証）← Vercel（フロント）
 
