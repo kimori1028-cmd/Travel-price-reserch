@@ -59,10 +59,25 @@ export function buildTrend(events: HistoryEvent[], nightDates: string[]): TrendP
   return points
 }
 
-export function trendStats(points: TrendPoint[]): { min: number; max: number } | null {
-  const vals = points.map((p) => p.total).filter((v): v is number => v != null)
-  if (vals.length === 0) return null
-  return { min: Math.min(...vals), max: Math.max(...vals) }
+export interface TrendStats {
+  min: number
+  max: number
+  /** 最安値をつけた時刻(epoch ms) */
+  minAt: number
+  /** 最高値をつけた時刻(epoch ms) */
+  maxAt: number
+}
+
+export function trendStats(points: TrendPoint[]): TrendStats | null {
+  const valued = points.filter((p): p is TrendPoint & { total: number } => p.total != null)
+  if (valued.length === 0) return null
+  let minP = valued[0]
+  let maxP = valued[0]
+  for (const p of valued) {
+    if (p.total < minP.total) minP = p
+    if (p.total > maxP.total) maxP = p
+  }
+  return { min: minP.total, max: maxP.total, minAt: minP.t, maxAt: maxP.t }
 }
 
 export interface RecentChange {

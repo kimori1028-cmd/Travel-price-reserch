@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { stayQuote, type PriceIndex } from '../lib/calc'
-import { addDays, fmtDateJa, fmtMan, fmtYen } from '../lib/dates'
+import { addDays, fmtDateJa, fmtMan, fmtMdFromMs, fmtYen } from '../lib/dates'
 import { loadHistory, type HistoryEvent } from '../lib/history'
 import { anaRakupackUrl, rakutenPlanUrl } from '../lib/rakuten'
 import { buildTrend, trendStats } from '../lib/trend'
@@ -108,11 +108,13 @@ function FavoriteCard({ index, fav, onToggleShare, onToggleNotify, onRemove }: C
               <span className="whitespace-nowrap">
                 <span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-600" />
                 最安 {fmtYen(stats.min)}
+                <span className="ml-0.5 text-slate-400">（{fmtMdFromMs(stats.minAt)}）</span>
               </span>
               {stats.max !== stats.min && (
                 <span className="whitespace-nowrap">
                   <span className="mr-1 inline-block h-2 w-2 rounded-full bg-rose-600" />
                   最高 {fmtYen(stats.max)}
+                  <span className="ml-0.5 text-slate-400">（{fmtMdFromMs(stats.maxAt)}）</span>
                 </span>
               )}
             </span>
