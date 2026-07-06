@@ -84,7 +84,7 @@ export function CalendarView({ index, adults, onAddFavorite }: Props) {
   }
 
   const cellHeight =
-    shownGrades.length === 1 ? 'h-14' : shownGrades.length === 2 ? 'h-[4.5rem]' : 'h-[5.3rem]'
+    shownGrades.length === 1 ? 'h-16' : shownGrades.length === 2 ? 'h-[5.4rem]' : 'h-[6.6rem]'
 
   return (
     <div className="pb-4">
@@ -119,8 +119,8 @@ export function CalendarView({ index, adults, onAddFavorite }: Props) {
         </div>
       </div>
 
-      {/* 月ナビ + カレンダー（左右スワイプで月移動） */}
-      <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      {/* 月ナビ + カレンダー（左右スワイプで月移動）。横幅を最大限使うため親の余白を打ち消す */}
+      <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} className="-mx-2">
       <div className="mb-1 flex items-center justify-between">
         <button
           type="button"
@@ -142,7 +142,7 @@ export function CalendarView({ index, adults, onAddFavorite }: Props) {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="grid grid-cols-7 border-b border-slate-100 text-center text-[11px] text-slate-400">
+        <div className="grid grid-cols-7 border-b border-slate-100 text-center text-xs text-slate-400">
           {WEEKDAY_LABELS.map((w, i) => (
             <div key={w} className={`py-1 ${i === 0 ? 'text-rose-400' : i === 6 ? 'text-sky-400' : ''}`}>
               {w}
@@ -164,7 +164,7 @@ export function CalendarView({ index, adults, onAddFavorite }: Props) {
                   }`}
                 >
                   <div
-                    className={`text-[11px] ${
+                    className={`text-xs ${
                       di === 0 ? 'text-rose-400' : di === 6 ? 'text-sky-400' : 'text-slate-500'
                     }`}
                   >
@@ -179,8 +179,8 @@ export function CalendarView({ index, adults, onAddFavorite }: Props) {
                       return (
                         <div
                           key={g.key}
-                          className={`flex items-baseline justify-center gap-[1px] font-semibold leading-[1.35] tracking-tighter ${
-                            multi ? 'text-[8px]' : 'text-[9px]'
+                          className={`flex items-baseline justify-center font-semibold leading-[1.5] ${
+                            multi ? 'gap-0 text-[9px] tracking-tighter' : 'gap-[1px] text-[11px] tracking-tight'
                           }`}
                         >
                           {multi && <span className={`${g.color} font-bold`}>{g.letter}</span>}
