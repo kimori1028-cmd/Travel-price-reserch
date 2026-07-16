@@ -19,17 +19,11 @@ interface Props {
   adults: number
   checkin: string
   nights: number
-  /** 表示するグレード（カレンダーで選択中のもの）。未指定なら全グレード。 */
-  grades?: GradeKey[]
   onClose: () => void
   onAddFavorite: (grade: GradeKey, checkin: string, nights: number, total: number | null) => void
 }
 
-export function DayDetail({ index, adults, checkin, nights, grades, onClose, onAddFavorite }: Props) {
-  const shownGrades = useMemo(
-    () => (grades && grades.length > 0 ? GRADES.filter((g) => grades.includes(g.key)) : GRADES),
-    [grades],
-  )
+export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavorite }: Props) {
   const [history, setHistory] = useState<HistoryEvent[] | null>(null)
 
   useEffect(() => {
@@ -75,7 +69,7 @@ export function DayDetail({ index, adults, checkin, nights, grades, onClose, onA
         </p>
 
         <div className="space-y-3">
-          {shownGrades.map((g) => {
+          {GRADES.map((g) => {
             const q = stayQuote(index, adults, g.key, checkin, nights)
             const firstRow = q.nights[0]?.row
             const trend = history
