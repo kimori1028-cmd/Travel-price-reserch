@@ -62,6 +62,12 @@ export function fmtMdFromMs(ms: number): string {
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
 }
 
+/** epoch ms → JSTの「M/D(曜)」表記 */
+export function fmtMdWeekdayFromMs(ms: number): string {
+  const d = new Date(ms + 9 * 3600 * 1000)
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}(${WEEKDAY_LABELS[d.getUTCDay()]})`
+}
+
 /** カレンダーセル用の短い金額表記（万円単位） */
 export function fmtMan(n: number): string {
   const man = n / 10000

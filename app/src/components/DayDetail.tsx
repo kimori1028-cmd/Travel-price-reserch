@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { stayQuote, type PriceIndex } from '../lib/calc'
-import { addDays, fmtDateJa, fmtDateShort, fmtMdFromMs, fmtYen } from '../lib/dates'
+import {
+  addDays,
+  fmtDateJa,
+  fmtDateShort,
+  fmtMdFromMs,
+  fmtMdWeekdayFromMs,
+  fmtYen,
+} from '../lib/dates'
 import { loadHistory, type HistoryEvent } from '../lib/history'
 import { anaRakupackUrl, rakutenPlanUrl } from '../lib/rakuten'
-import { buildTrend, trendStats } from '../lib/trend'
+import { buildTrend, trendChanges, trendStats } from '../lib/trend'
 import { GRADES, type GradeKey } from '../lib/types'
 import { TrendChart } from './TrendChart'
 
@@ -69,6 +76,7 @@ export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavori
               ? buildTrend(history.filter((e) => e.room_grade === g.key), nightDates)
               : []
             const stats = trendStats(trend)
+            const changes = trendChanges(trend)
             return (
               <div key={g.key} className={`rounded-xl border p-3 ${g.bgSoft}`}>
                 <div className="flex items-center justify-between">
@@ -121,9 +129,52 @@ export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavori
                             記録開始からまだ変動はありません
                           </div>
                         ) : (
-                          <TrendChart points={trend} now={now} />
+                          <>
+                            <TrendChart points={trend} now={now} />
+                            <ul className="mt-1 space-y-0.5">
+                              {changes.map((c) => {
+                                const down = c.diff != null && c.diff < 0
+                                const up = c.diff != null && c.diff > 0
+                                return (
+                                  <li
+                                    key={c.t}
+                                    className="flex items-center gap-1.5 text-[11px] leading-tight text-slate-600"
+                                  >
+                                    <span className="w-14 shrink-0 tabular-nums text-slate-400">
+                                      {fmtMdWeekdayFromMs(c.t)}
+                                    </span>
+                                    <span className="tabular-nums text-slate-400">
+                                      {c.from != null ? fmtYen(c.from) : '満室'}
+                                    </span>
+                                    <span className="text-slate-300">→</span>
+                                    <span
+                                      className={`font-bold tabular-nums ${
+                                        down
+                                          ? 'text-emerald-600'
+                                          : up
+                                            ? 'text-rose-600'
+                                            : 'text-slate-700'
+                                      }`}
+                                    >
+                                      {c.to != null ? fmtYen(c.to) : '満室'}
+                                    </span>
+                                    {c.diff != null && c.diff !== 0 && (
+                                      <span
+                                        className={`ml-auto shrink-0 tabular-nums ${
+                                          down ? 'text-emerald-600' : 'text-rose-600'
+                                        }`}
+                                      >
+                                        {down ? '▼' : '▲'}
+                                        {fmtYen(Math.abs(c.diff))}
+                                      </span>
+                                    )}
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          </>
                         )}
-                        <div className="text-right text-[10px] text-slate-400">
+                        <div className="mt-1 text-right text-[10px] text-slate-400">
                           {new Date(trend[0].t).toLocaleDateString('ja-JP', {
                             timeZone: 'Asia/Tokyo',
                             month: 'numeric',

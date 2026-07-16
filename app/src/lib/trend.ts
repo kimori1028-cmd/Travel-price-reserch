@@ -80,6 +80,33 @@ export function trendStats(points: TrendPoint[]): TrendStats | null {
   return { min: minP.total, max: maxP.total, minAt: minP.t, maxAt: maxP.t }
 }
 
+export interface TrendChange {
+  /** 変化が起きた時刻(epoch ms) */
+  t: number
+  /** 変化前のN泊合計。null = それまで満室/不明 */
+  from: number | null
+  /** 変化後のN泊合計。null = 満室/不明になった */
+  to: number | null
+  /** to - from（両方が金額のときのみ数値、それ以外は null） */
+  diff: number | null
+}
+
+/**
+ * ステップ状の推移点から「いつ・いくらから・いくらに変わったか」の
+ * 変化イベント列を作る。最新の変化が先頭になるよう新しい順で返す。
+ */
+export function trendChanges(points: TrendPoint[]): TrendChange[] {
+  const changes: TrendChange[] = []
+  for (let i = 1; i < points.length; i++) {
+    const from = points[i - 1].total
+    const to = points[i].total
+    if (from === to) continue
+    const diff = from != null && to != null ? to - from : null
+    changes.push({ t: points[i].t, from, to, diff })
+  }
+  return changes.reverse()
+}
+
 export interface RecentChange {
   dir: 'up' | 'down'
   /** 変動幅に応じた矢印の本数（1〜3） */
