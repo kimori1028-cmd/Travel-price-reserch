@@ -107,6 +107,50 @@ export function trendChanges(points: TrendPoint[]): TrendChange[] {
   return changes.reverse()
 }
 
+export interface TrendDayChange {
+  /** その日の最後の変化時刻(epoch ms) */
+  t: number
+  /** JSTの日付 YYYY-MM-DD */
+  date: string
+  /** その日の最初の変化前のN泊合計（＝前日終値）。null = 満室/不明 */
+  from: number | null
+  /** その日の最後の変化後のN泊合計（＝その日の終値）。null = 満室/不明 */
+  to: number | null
+  /** to - from（その日1日の正味の変動。両方が金額のときのみ数値） */
+  diff: number | null
+}
+
+/** JSTでの日付キー YYYY-MM-DD */
+function jstDateKey(ms: number): string {
+  const d = new Date(ms + 9 * 3600 * 1000)
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(
+    d.getUTCDate(),
+  ).padStart(2, '0')}`
+}
+
+/**
+ * 変化イベントを「同じ日はまとめて」1行にする。
+ * 各日について「その日の始値(最初の変化前) → 終値(最後の変化後)」と
+ * 1日の正味の差額を出す。新しい日が先頭になるよう新しい順で返す。
+ */
+export function trendDailyChanges(points: TrendPoint[]): TrendDayChange[] {
+  const out: TrendDayChange[] = []
+  // trendChanges は新しい順。同日は連続するので先頭=その日の最新。
+  for (const c of trendChanges(points)) {
+    const date = jstDateKey(c.t)
+    const last = out[out.length - 1]
+    if (last && last.date === date) {
+      // より古い同日変化: その日の始値を遡って更新
+      last.from = c.from
+      last.diff = last.from != null && last.to != null ? last.to - last.from : null
+    } else {
+      out.push({ t: c.t, date, from: c.from, to: c.to, diff: c.diff })
+    }
+  }
+  // 1日の中で上下して正味ゼロになった日は除外（動きなしと同義）
+  return out.filter((d) => d.from !== d.to)
+}
+
 export interface RecentChange {
   dir: 'up' | 'down'
   /** 変動幅に応じた矢印の本数（1〜3） */

@@ -4,14 +4,13 @@ import {
   addDays,
   fmtDateJa,
   fmtDateShort,
-  fmtHmFromMs,
   fmtMdFromMs,
   fmtMdWeekdayFromMs,
   fmtYen,
 } from '../lib/dates'
 import { loadHistory, type HistoryEvent } from '../lib/history'
 import { anaRakupackUrl, rakutenPlanUrl } from '../lib/rakuten'
-import { buildTrend, trendChanges, trendStats } from '../lib/trend'
+import { buildTrend, trendDailyChanges, trendStats } from '../lib/trend'
 import { GRADES, type GradeKey } from '../lib/types'
 import { TrendChart } from './TrendChart'
 
@@ -77,7 +76,7 @@ export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavori
               ? buildTrend(history.filter((e) => e.room_grade === g.key), nightDates)
               : []
             const stats = trendStats(trend)
-            const changes = trendChanges(trend)
+            const changes = trendDailyChanges(trend)
             return (
               <div key={g.key} className={`rounded-xl border p-3 ${g.bgSoft}`}>
                 <div className="flex items-center justify-between">
@@ -141,13 +140,8 @@ export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavori
                                     key={c.t}
                                     className="flex items-center gap-1.5 text-[11px] leading-tight text-slate-600"
                                   >
-                                    <span className="w-16 shrink-0 leading-tight text-slate-400">
-                                      <span className="block tabular-nums">
-                                        {fmtMdWeekdayFromMs(c.t)}
-                                      </span>
-                                      <span className="block text-[10px] tabular-nums text-slate-300">
-                                        {fmtHmFromMs(c.t)}
-                                      </span>
+                                    <span className="w-14 shrink-0 tabular-nums text-slate-400">
+                                      {fmtMdWeekdayFromMs(c.t)}
                                     </span>
                                     <span className="tabular-nums text-slate-400">
                                       {c.from != null ? fmtYen(c.from) : '満室'}
