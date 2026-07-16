@@ -285,6 +285,7 @@ export function CalendarView({ index, adults, updated, onAddFavorite }: Props) {
           adults={adults}
           checkin={selectedDay}
           nights={nights}
+          grades={selected}
           onClose={() => setSelectedDay(null)}
           onAddFavorite={onAddFavorite}
         />
