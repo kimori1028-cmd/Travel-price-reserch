@@ -4,6 +4,7 @@ import {
   addDays,
   fmtDateJa,
   fmtDateShort,
+  fmtHmFromMs,
   fmtMdFromMs,
   fmtMdWeekdayFromMs,
   fmtYen,
@@ -140,8 +141,13 @@ export function DayDetail({ index, adults, checkin, nights, onClose, onAddFavori
                                     key={c.t}
                                     className="flex items-center gap-1.5 text-[11px] leading-tight text-slate-600"
                                   >
-                                    <span className="w-14 shrink-0 tabular-nums text-slate-400">
-                                      {fmtMdWeekdayFromMs(c.t)}
+                                    <span className="w-16 shrink-0 leading-tight text-slate-400">
+                                      <span className="block tabular-nums">
+                                        {fmtMdWeekdayFromMs(c.t)}
+                                      </span>
+                                      <span className="block text-[10px] tabular-nums text-slate-300">
+                                        {fmtHmFromMs(c.t)}
+                                      </span>
                                     </span>
                                     <span className="tabular-nums text-slate-400">
                                       {c.from != null ? fmtYen(c.from) : '満室'}
